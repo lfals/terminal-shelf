@@ -1,0 +1,12 @@
+appId: com.felps.term
+productName: Term
+directories:
+  output: release
+files:
+  - out/**/*
+  - .electron/**/*
+  - package.json
+asar: true
+npmRebuild: false
+mac:
+  category: public.app-category.developer-tools

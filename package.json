@@ -2,11 +2,18 @@
   "name": "term",
   "version": "0.1.0",
   "private": true,
+  "main": ".electron/main.js",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "dev": "concurrently -k -n web,electron:build,electron -c blue,magenta,green \"bun run dev:web\" \"bun run dev:electron:build\" \"bun run dev:electron:app\"",
+    "dev:web": "next dev",
+    "dev:electron:build": "bun build ./electron/main.ts ./electron/preload.ts --outdir ./.electron --target=node --format=cjs --external electron --watch",
+    "dev:electron:app": "wait-on tcp:3000 .electron/main.js .electron/preload.js && ELECTRON_RENDERER_URL=http://localhost:3000 electronmon .electron/main.js",
+    "build": "bun run build:web && bun run build:electron",
+    "build:web": "next build",
+    "build:electron": "bun build ./electron/main.ts ./electron/preload.ts --outdir ./.electron --target=node --format=cjs --external electron",
+    "start": "electron .electron/main.js",
+    "dist": "bun run build && electron-builder --config electron-builder.yml",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
@@ -40,6 +47,8 @@
     "unrs-resolver"
   ],
   "trustedDependencies": [
+    "electron",
+    "electron-winstaller",
     "sharp",
     "unrs-resolver"
   ]
