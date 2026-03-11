@@ -1,14 +1,7 @@
 "use client";
 
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
-import {
-  AlertCircle,
-  FolderPlus,
-  LoaderCircle,
-  MonitorCog,
-  Plus,
-  SquareTerminal,
-} from "lucide-react";
+import { AlertCircle, FolderPlus, LoaderCircle, Plus, SquareTerminal } from "lucide-react";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { TerminalPane } from "@/components/terminal/terminal-pane";
@@ -22,8 +15,6 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { getRuntimeInfo } from "@/lib/runtime";
 import type { Project, Thread, ThreadStatus, WorkspaceSnapshot } from "@/lib/workspace-types";
 
-type MainView = "workspace" | "settings";
-
 const MAX_BUFFER_SIZE = 200_000;
 
 const trimBuffer = (value: string) =>
@@ -36,7 +27,6 @@ export function WorkspaceShell() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<MainView>("workspace");
   const [isLoading, setIsLoading] = useState(true);
   const [isBusy, setIsBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -54,16 +44,6 @@ export function WorkspaceShell() {
         ? projects.find((project) => project.id === activeThread.projectId) ?? null
         : null,
     [activeThread, projects]
-  );
-  const recentThreads = useMemo(
-    () =>
-      [...threads]
-        .filter((thread) => thread.lastOpenedAt)
-        .sort((left, right) => {
-          return (right.lastOpenedAt ?? "").localeCompare(left.lastOpenedAt ?? "");
-        })
-        .slice(0, 5),
-    [threads]
   );
   const activeBuffer = activeThreadId ? terminalBuffersRef.current[activeThreadId] ?? "" : "";
 
@@ -249,7 +229,6 @@ export function WorkspaceShell() {
       startTransition(() => {
         setThreads((currentThreads) => updateThread(currentThreads, thread));
         setActiveThreadId(thread.id);
-        setActiveView("workspace");
       });
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -309,9 +288,8 @@ export function WorkspaceShell() {
     }
   };
 
-  const breadcrumbLabel = activeView === "settings" ? "Settings" : activeProject?.name ?? "Workspace";
-  const breadcrumbDetail =
-    activeView === "settings" ? "Local preferences" : activeThread?.title ?? "Select a terminal";
+  const breadcrumbLabel = activeProject?.name ?? "Workspace";
+  const breadcrumbDetail = activeThread?.title ?? "Select a terminal";
 
   return (
     <SidebarProvider>
@@ -319,8 +297,6 @@ export function WorkspaceShell() {
         projects={projects}
         threads={threads}
         activeThreadId={activeThreadId}
-        activeView={activeView}
-        recentThreads={recentThreads}
         isDesktopApp={runtimeInfo.isDesktopApp}
         hasDesktopBridge={runtimeInfo.hasDesktopBridge}
         runtime={runtime}
@@ -330,7 +306,6 @@ export function WorkspaceShell() {
         onOpenThread={handleOpenThread}
         onRemoveProject={handleRemoveProject}
         onRemoveThread={handleRemoveThread}
-        onSelectView={setActiveView}
       />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-800/80 bg-slate-950/70 text-slate-100 backdrop-blur-xl transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
@@ -377,18 +352,6 @@ export function WorkspaceShell() {
                 <span>Loading workspace…</span>
               </CardContent>
             </Card>
-          ) : activeView === "settings" ? (
-            <Card className="workspace-muted-panel text-slate-100">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MonitorCog className="size-5 text-cyan-300" />
-                  Settings
-                </CardTitle>
-                <CardDescription className="text-slate-300">
-                  Preferences will live here in the next iteration. The current app state is already local-first.
-                </CardDescription>
-              </CardHeader>
-            </Card>
           ) : projects.length === 0 ? (
             <Card className="workspace-muted-panel text-slate-100">
               <CardHeader>
@@ -409,7 +372,7 @@ export function WorkspaceShell() {
               <CardHeader>
                 <CardTitle>Select a thread</CardTitle>
                 <CardDescription className="max-w-2xl text-slate-300">
-                  Create a terminal from the project menu or open one of the recent sessions from the sidebar.
+                  Create a terminal from the project menu to start working in one of your project directories.
                 </CardDescription>
               </CardHeader>
             </Card>
