@@ -118,6 +118,10 @@
 }
 
 @layer base {
+  :root {
+    color-scheme: dark;
+  }
+
   html {
     @apply font-sans;
   }
@@ -127,13 +131,29 @@
   body {
     @apply bg-background text-foreground;
     background-image:
-      radial-gradient(circle at top left, color-mix(in oklab, var(--primary) 28%, transparent), transparent 30%),
-      radial-gradient(circle at bottom right, color-mix(in oklab, var(--accent) 20%, transparent), transparent 32%),
-      linear-gradient(135deg, #0a0f1e 0%, #121a2f 55%, #17122f 100%);
+      radial-gradient(circle at top left, rgb(34 211 238 / 0.18), transparent 28%),
+      radial-gradient(circle at bottom right, rgb(59 130 246 / 0.16), transparent 26%),
+      linear-gradient(145deg, #050816 0%, #0b1220 48%, #0f172a 100%);
+  }
+
+  ::selection {
+    background: rgb(34 211 238 / 0.3);
+    color: #f8fafc;
   }
 }
 
 @layer components {
+  [data-slot="sidebar-inner"] {
+    background:
+      linear-gradient(180deg, rgb(15 23 42 / 0.98), rgb(10 15 28 / 0.96));
+    backdrop-filter: blur(18px);
+  }
+
+  [data-slot="sidebar-wrapper"] {
+    background:
+      linear-gradient(145deg, rgb(2 6 23 / 0.86), rgb(15 23 42 / 0.72));
+  }
+
   .xterm {
     height: 100%;
   }
@@ -141,5 +161,17 @@
   .xterm-viewport {
     border-bottom-left-radius: inherit;
     border-bottom-right-radius: inherit;
+  }
+
+  .workspace-panel {
+    background: linear-gradient(180deg, rgb(9 14 28 / 0.92), rgb(6 10 22 / 0.96));
+    border: 1px solid rgb(148 163 184 / 0.14);
+    box-shadow: 0 24px 60px rgb(2 6 23 / 0.35);
+  }
+
+  .workspace-muted-panel {
+    background: linear-gradient(180deg, rgb(15 23 42 / 0.9), rgb(12 18 32 / 0.92));
+    border: 1px solid rgb(148 163 184 / 0.14);
+    box-shadow: 0 20px 45px rgb(2 6 23 / 0.24);
   }
 }

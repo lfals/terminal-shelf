@@ -324,10 +324,10 @@ export function WorkspaceShell() {
         onSelectView={setActiveView}
       />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b border-white/10 bg-black/10 backdrop-blur-sm transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-800/80 bg-slate-950/70 text-slate-100 backdrop-blur-xl transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
           <div className="flex min-w-0 flex-1 items-center gap-2 px-4">
             <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
+            <Separator orientation="vertical" className="mr-2 bg-slate-700 data-[orientation=vertical]:h-4" />
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem className="hidden md:block">
@@ -352,24 +352,24 @@ export function WorkspaceShell() {
             </Button>
           </div>
         </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-4">
+        <div className="flex flex-1 flex-col gap-4 bg-transparent p-4 pt-4 text-slate-100">
           {errorMessage ? (
-            <Alert variant="destructive">
+            <Alert variant="destructive" className="border-rose-500/25 bg-rose-950/45 text-rose-100">
               <AlertCircle className="size-4" />
               <AlertTitle>Workspace error</AlertTitle>
-              <AlertDescription>{errorMessage}</AlertDescription>
+              <AlertDescription className="text-rose-100/85">{errorMessage}</AlertDescription>
             </Alert>
           ) : null}
 
           {isLoading ? (
-            <Card className="flex min-h-[320px] flex-1 items-center justify-center border-white/10 bg-black/25 text-white shadow-2xl shadow-black/20">
+            <Card className="workspace-panel flex min-h-[320px] flex-1 items-center justify-center text-slate-100">
               <CardContent className="flex items-center gap-3 p-8">
-                <LoaderCircle className="size-5 animate-spin" />
+                <LoaderCircle className="size-5 animate-spin text-cyan-300" />
                 <span>Loading workspace…</span>
               </CardContent>
             </Card>
           ) : activeView === "settings" ? (
-            <Card className="border-white/10 bg-black/25 text-white shadow-2xl shadow-black/20">
+            <Card className="workspace-muted-panel text-slate-100">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <MonitorCog className="size-5 text-cyan-300" />
@@ -381,10 +381,10 @@ export function WorkspaceShell() {
               </CardHeader>
             </Card>
           ) : projects.length === 0 ? (
-            <Card className="border-white/10 bg-black/25 text-white shadow-2xl shadow-black/20">
+            <Card className="workspace-muted-panel text-slate-100">
               <CardHeader>
                 <CardTitle>No projects yet</CardTitle>
-                <CardDescription className="text-slate-300">
+                <CardDescription className="max-w-2xl text-slate-300">
                   Add your first project folder to start creating terminal threads bound to that directory.
                 </CardDescription>
               </CardHeader>
@@ -396,17 +396,17 @@ export function WorkspaceShell() {
               </CardContent>
             </Card>
           ) : !activeThread ? (
-            <Card className="border-white/10 bg-black/25 text-white shadow-2xl shadow-black/20">
+            <Card className="workspace-muted-panel text-slate-100">
               <CardHeader>
                 <CardTitle>Select a thread</CardTitle>
-                <CardDescription className="text-slate-300">
+                <CardDescription className="max-w-2xl text-slate-300">
                   Create a terminal from the project menu or open one of the recent sessions from the sidebar.
                 </CardDescription>
               </CardHeader>
             </Card>
           ) : (
-            <Card className="flex min-h-[calc(100vh-8.5rem)] flex-1 flex-col overflow-hidden border-white/10 bg-[#08111f]/90 text-white shadow-2xl shadow-black/30">
-              <CardHeader className="border-b border-white/10 bg-white/5">
+            <Card className="workspace-panel flex min-h-[calc(100vh-8.5rem)] flex-1 flex-col overflow-hidden text-slate-100">
+              <CardHeader className="border-b border-slate-800/90 bg-slate-900/75">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <CardTitle className="flex items-center gap-2 text-lg">
@@ -442,8 +442,8 @@ export function WorkspaceShell() {
                   status={activeThread.status}
                 />
                 {activeThread.status !== "running" ? (
-                  <div className="absolute inset-0 flex items-center justify-center bg-slate-950/65 backdrop-blur-sm">
-                    <div className="max-w-sm rounded-2xl border border-white/10 bg-slate-950/90 p-6 text-center shadow-xl">
+                  <div className="absolute inset-0 flex items-center justify-center bg-slate-950/72 backdrop-blur-sm">
+                    <div className="max-w-sm rounded-2xl border border-slate-700/70 bg-slate-950/95 p-6 text-center shadow-xl">
                       <p className="text-sm font-medium text-white">
                         This session is currently {threadStatusLabel[activeThread.status].toLowerCase()}.
                       </p>
@@ -487,12 +487,12 @@ const threadStatusLabel: Record<ThreadStatus, string> = {
 
 function statusBadgeClassName(status: ThreadStatus) {
   if (status === "running") {
-    return "border-emerald-400/30 bg-emerald-400/15 text-emerald-200";
+    return "border-emerald-400/30 bg-emerald-500/15 text-emerald-200";
   }
 
   if (status === "errored") {
-    return "border-rose-400/30 bg-rose-400/15 text-rose-200";
+    return "border-rose-400/30 bg-rose-500/15 text-rose-200";
   }
 
-  return "border-white/10 bg-white/10 text-slate-200";
+  return "border-slate-700/80 bg-slate-800/80 text-slate-200";
 }

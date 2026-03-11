@@ -26,7 +26,7 @@ export default function RootLayout({
 }>) {
   return (
     <TooltipProvider>
-    <html lang="pt-BR" className={cn("font-sans", geistSans.variable)}>
+    <html lang="pt-BR" className={cn("dark font-sans", geistSans.variable)} suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}
         >
