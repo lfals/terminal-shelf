@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { ChevronsUpDown, Plus } from "lucide-react"
+import { ChevronsUpDown, FolderPlus, LayoutGrid } from "lucide-react"
 
 import {
   DropdownMenu,
@@ -9,7 +9,6 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -19,21 +18,20 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 
-export function TeamSwitcher({
-  teams,
-}: {
-  teams: {
-    name: string
-    logo: React.ElementType
-    plan: string
-  }[]
-}) {
-  const { isMobile } = useSidebar()
-  const [activeTeam, setActiveTeam] = React.useState(teams[0])
+interface TeamSwitcherProps {
+  label: string
+  description: string
+  busy?: boolean
+  onAddProject: () => void
+}
 
-  if (!activeTeam) {
-    return null
-  }
+export function TeamSwitcher({
+  label,
+  description,
+  busy = false,
+  onAddProject,
+}: TeamSwitcherProps) {
+  const { isMobile } = useSidebar()
 
   return (
     <SidebarMenu>
@@ -45,11 +43,11 @@ export function TeamSwitcher({
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                <activeTeam.logo className="size-4" />
+                <LayoutGrid className="size-4" />
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{activeTeam.name}</span>
-                <span className="truncate text-xs">{activeTeam.plan}</span>
+                <span className="truncate font-medium">{label}</span>
+                <span className="truncate text-xs">{description}</span>
               </div>
               <ChevronsUpDown className="ml-auto" />
             </SidebarMenuButton>
@@ -61,27 +59,20 @@ export function TeamSwitcher({
             sideOffset={4}
           >
             <DropdownMenuLabel className="text-xs text-muted-foreground">
-              Teams
+              Workspace
             </DropdownMenuLabel>
-            {teams.map((team, index) => (
-              <DropdownMenuItem
-                key={team.name}
-                onClick={() => setActiveTeam(team)}
-                className="gap-2 p-2"
-              >
-                <div className="flex size-6 items-center justify-center rounded-md border">
-                  <team.logo className="size-3.5 shrink-0" />
-                </div>
-                {team.name}
-                <DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>
-              </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="gap-2 p-2">
-              <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
-                <Plus className="size-4" />
+            <DropdownMenuItem className="gap-2 p-2" onClick={onAddProject} disabled={busy}>
+              <div className="flex size-6 items-center justify-center rounded-md border">
+                <FolderPlus className="size-3.5 shrink-0" />
               </div>
-              <div className="font-medium text-muted-foreground">Add team</div>
+              Add project
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="gap-2 p-2" disabled>
+              <div className="flex size-6 items-center justify-center rounded-md border">
+                <LayoutGrid className="size-3.5 shrink-0" />
+              </div>
+              Local-first workspace
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

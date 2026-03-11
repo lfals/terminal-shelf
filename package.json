@@ -6,22 +6,25 @@
   "scripts": {
     "dev": "concurrently -k -n web,electron:build,electron -c blue,magenta,green \"bun run dev:web\" \"bun run dev:electron:build\" \"bun run dev:electron:app\"",
     "dev:web": "next dev",
-    "dev:electron:build": "bun build ./electron/main.ts ./electron/preload.ts --outdir ./.electron --target=node --format=cjs --external electron --watch",
+    "dev:electron:build": "bun build ./electron/main.ts ./electron/preload.ts --outdir ./.electron --target=node --format=cjs --external electron --external node-pty --watch",
     "dev:electron:app": "wait-on tcp:3000 .electron/main.js .electron/preload.js && ELECTRON_RENDERER_URL=http://localhost:3000 electronmon .electron/main.js",
     "build": "bun run build:web && bun run build:electron",
     "build:web": "next build",
-    "build:electron": "bun build ./electron/main.ts ./electron/preload.ts --outdir ./.electron --target=node --format=cjs --external electron",
+    "build:electron": "bun build ./electron/main.ts ./electron/preload.ts --outdir ./.electron --target=node --format=cjs --external electron --external node-pty",
     "start": "electron .electron/main.js",
     "dist": "bun run build && electron-builder --config electron-builder.yml",
     "lint": "eslint ."
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "electron": "^41.0.0",
     "lucide-react": "^0.577.0",
     "next": "16.1.6",
+    "node-pty": "^1.1.0",
     "radix-ui": "^1.4.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -50,6 +53,7 @@
   "trustedDependencies": [
     "electron",
     "electron-winstaller",
+    "node-pty",
     "sharp",
     "unrs-resolver"
   ]

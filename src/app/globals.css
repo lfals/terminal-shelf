@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "@xterm/xterm/css/xterm.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -129,5 +130,16 @@
       radial-gradient(circle at top left, color-mix(in oklab, var(--primary) 28%, transparent), transparent 30%),
       radial-gradient(circle at bottom right, color-mix(in oklab, var(--accent) 20%, transparent), transparent 32%),
       linear-gradient(135deg, #0a0f1e 0%, #121a2f 55%, #17122f 100%);
+  }
+}
+
+@layer components {
+  .xterm {
+    height: 100%;
+  }
+
+  .xterm-viewport {
+    border-bottom-left-radius: inherit;
+    border-bottom-right-radius: inherit;
   }
 }
