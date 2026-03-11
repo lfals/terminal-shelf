@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { getRuntimeInfo } from "@/lib/runtime";
 import type { Project, Thread, ThreadStatus, WorkspaceSnapshot } from "@/lib/workspace-types";
 
 type MainView = "workspace" | "settings";
@@ -40,12 +41,13 @@ export function WorkspaceShell() {
   const [isBusy, setIsBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const terminalBuffersRef = useRef<Record<string, string>>({});
+  const runtimeInfo = typeof window === "undefined" ? getRuntimeInfo(undefined) : getRuntimeInfo(window);
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.id === activeThreadId) ?? null,
     [activeThreadId, threads]
   );
-  const runtime = typeof window === "undefined" ? undefined : window.desktop?.runtime;
+  const runtime = runtimeInfo.runtime;
   const activeProject = useMemo(
     () =>
       activeThread
@@ -67,10 +69,15 @@ export function WorkspaceShell() {
 
   useEffect(() => {
     const desktop = window.desktop;
+    const currentRuntimeInfo = getRuntimeInfo(window);
 
     if (!desktop) {
       setIsLoading(false);
-      setErrorMessage("A API do Electron não está disponível nesta execução.");
+      setErrorMessage(
+        currentRuntimeInfo.isDesktopApp
+          ? "O app esta rodando no Electron, mas a bridge desktop nao foi exposta pelo preload."
+          : "A API do Electron nao esta disponivel nesta execucao web."
+      );
       return;
     }
 
@@ -314,6 +321,8 @@ export function WorkspaceShell() {
         activeThreadId={activeThreadId}
         activeView={activeView}
         recentThreads={recentThreads}
+        isDesktopApp={runtimeInfo.isDesktopApp}
+        hasDesktopBridge={runtimeInfo.hasDesktopBridge}
         runtime={runtime}
         busy={isBusy}
         onAddProject={handleAddProject}

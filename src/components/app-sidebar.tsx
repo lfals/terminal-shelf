@@ -14,16 +14,8 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
+import type { DesktopRuntime } from "@/lib/runtime"
 import type { Project, Thread } from "@/lib/workspace-types"
-
-interface DesktopRuntime {
-  platform: string
-  versions: {
-    chrome: string
-    electron: string
-    node: string
-  }
-}
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   projects: Project[]
@@ -31,6 +23,8 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   recentThreads: Thread[]
   activeThreadId: string | null
   activeView: "workspace" | "settings"
+  isDesktopApp?: boolean
+  hasDesktopBridge?: boolean
   runtime?: DesktopRuntime
   busy?: boolean
   onAddProject: () => void
@@ -47,6 +41,8 @@ export function AppSidebar({
   recentThreads,
   activeThreadId,
   activeView,
+  isDesktopApp = false,
+  hasDesktopBridge = false,
   runtime,
   busy = false,
   onAddProject,
@@ -116,11 +112,35 @@ export function AppSidebar({
       <SidebarFooter>
         <NavUser
           name="Local Workspace"
-          subtitle={runtime ? `${runtime.platform} · Electron ${runtime.versions.electron}` : "Electron desktop"}
+          subtitle={getRuntimeSubtitle({ isDesktopApp, hasDesktopBridge, runtime })}
           icon={GalleryVerticalEnd}
         />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   )
+}
+
+function getRuntimeSubtitle({
+  isDesktopApp,
+  hasDesktopBridge,
+  runtime,
+}: {
+  isDesktopApp: boolean
+  hasDesktopBridge: boolean
+  runtime?: DesktopRuntime
+}) {
+  if (runtime) {
+    return `${runtime.platform} · Electron ${runtime.versions.electron}`
+  }
+
+  if (isDesktopApp && !hasDesktopBridge) {
+    return "Electron desktop · bridge indisponivel"
+  }
+
+  if (isDesktopApp) {
+    return "Electron desktop"
+  }
+
+  return "Web browser"
 }

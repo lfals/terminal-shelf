@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import os from "node:os";
 import { spawn, type IPty } from "node-pty";
@@ -19,6 +19,52 @@ type WorkspaceStore = WorkspaceSnapshot;
 const rendererUrl = process.env.ELECTRON_RENDERER_URL;
 const STORE_FILE_NAME = "workspace.json";
 const DEFAULT_TERMINAL_SIZE = { cols: 80, rows: 24 };
+
+const resolveAppAssetPath = (...segments: string[]) => {
+  const candidateRoots = [
+    process.cwd(),
+    app.getAppPath(),
+    join(app.getAppPath(), ".."),
+    process.resourcesPath,
+    join(process.resourcesPath, "app.asar"),
+  ];
+
+  const candidatePaths = [...new Set(candidateRoots.map((rootPath) => join(rootPath, ...segments)))];
+  const existingPath = candidatePaths.find((candidatePath) => existsSync(candidatePath));
+
+  return existingPath ?? candidatePaths[0];
+};
+
+const ensureNodePtySpawnHelperExecutable = () => {
+  if (process.platform !== "darwin") {
+    return;
+  }
+
+  const arch = process.arch === "arm64" ? "darwin-arm64" : "darwin-x64";
+  const candidateRoots = [
+    process.cwd(),
+    app.getAppPath(),
+    join(app.getAppPath(), ".."),
+    process.resourcesPath,
+    join(process.resourcesPath, "app.asar.unpacked"),
+  ];
+  const helperRelativePath = join("node_modules", "node-pty", "prebuilds", arch, "spawn-helper");
+
+  for (const rootPath of candidateRoots) {
+    const helperPath = join(rootPath, helperRelativePath);
+
+    if (!existsSync(helperPath)) {
+      continue;
+    }
+
+    try {
+      chmodSync(helperPath, 0o755);
+      return;
+    } catch {
+      // Try the next candidate path.
+    }
+  }
+};
 
 const isSafeExternalUrl = (value: string) => {
   try {
@@ -414,6 +460,14 @@ let repository: WorkspaceRepository;
 let ptyManager: PtyManager;
 
 function createMainWindow() {
+  const preloadScript = resolveAppAssetPath(".electron", "preload.js");
+
+  if (!existsSync(preloadScript)) {
+    throw new Error(
+      `Preload script not found at ${preloadScript}. Run "bun run build:electron" before starting Electron.`
+    );
+  }
+
   const mainWindow = new BrowserWindow({
     width: 1440,
     height: 920,
@@ -422,7 +476,7 @@ function createMainWindow() {
     backgroundColor: "#0a0f1e",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     webPreferences: {
-      preload: join(__dirname, "preload.js"),
+      preload: preloadScript,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -450,7 +504,7 @@ function createMainWindow() {
     return mainWindow;
   }
 
-  const rendererHtml = join(__dirname, "..", "out", "index.html");
+  const rendererHtml = resolveAppAssetPath("out", "index.html");
 
   if (!existsSync(rendererHtml)) {
     throw new Error(
@@ -464,6 +518,7 @@ function createMainWindow() {
 }
 
 app.whenReady().then(() => {
+  ensureNodePtySpawnHelperExecutable();
   repository = new WorkspaceRepository();
   ptyManager = new PtyManager(repository);
 
