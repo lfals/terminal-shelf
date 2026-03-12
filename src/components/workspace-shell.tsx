@@ -1,7 +1,7 @@
 "use client";
 
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, FolderPlus, LoaderCircle, Plus, SquareTerminal } from "lucide-react";
+import { AlertCircle, FolderPlus, LoaderCircle, MonitorCog, Plus } from "lucide-react";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { TerminalPane } from "@/components/terminal/terminal-pane";
@@ -16,6 +16,7 @@ import { getRuntimeInfo } from "@/lib/runtime";
 import type { Project, Thread, ThreadStatus, WorkspaceSnapshot } from "@/lib/workspace-types";
 
 const MAX_BUFFER_SIZE = 200_000;
+type MainView = "terminal" | "settings";
 
 const trimBuffer = (value: string) =>
   value.length > MAX_BUFFER_SIZE ? value.slice(value.length - MAX_BUFFER_SIZE) : value;
@@ -27,11 +28,12 @@ export function WorkspaceShell() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<MainView>("terminal");
+  const [runtimeInfo, setRuntimeInfo] = useState(() => getRuntimeInfo(undefined));
   const [isLoading, setIsLoading] = useState(true);
   const [isBusy, setIsBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const terminalBuffersRef = useRef<Record<string, string>>({});
-  const runtimeInfo = typeof window === "undefined" ? getRuntimeInfo(undefined) : getRuntimeInfo(window);
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.id === activeThreadId) ?? null,
@@ -50,6 +52,7 @@ export function WorkspaceShell() {
   useEffect(() => {
     const desktop = window.desktop;
     const currentRuntimeInfo = getRuntimeInfo(window);
+    setRuntimeInfo(currentRuntimeInfo);
 
     if (!desktop) {
       setIsLoading(false);
@@ -229,6 +232,7 @@ export function WorkspaceShell() {
       startTransition(() => {
         setThreads((currentThreads) => updateThread(currentThreads, thread));
         setActiveThreadId(thread.id);
+        setActiveView("terminal");
       });
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -288,8 +292,8 @@ export function WorkspaceShell() {
     }
   };
 
-  const breadcrumbLabel = activeProject?.name ?? "Workspace";
-  const breadcrumbDetail = activeThread?.title ?? "Select a terminal";
+  const breadcrumbLabel = activeView === "settings" ? "Workspace" : activeProject?.name ?? "Workspace";
+  const breadcrumbDetail = activeView === "settings" ? "Settings" : activeThread?.title ?? "Select a terminal";
 
   return (
     <SidebarProvider>
@@ -297,13 +301,13 @@ export function WorkspaceShell() {
         projects={projects}
         threads={threads}
         activeThreadId={activeThreadId}
-        isDesktopApp={runtimeInfo.isDesktopApp}
-        hasDesktopBridge={runtimeInfo.hasDesktopBridge}
-        runtime={runtime}
+        activeView={activeView}
+        hasMacWindowControlsInset={ runtime?.platform === "darwin"}
         busy={isBusy}
         onAddProject={handleAddProject}
         onCreateThread={handleCreateThread}
         onOpenThread={handleOpenThread}
+        onOpenSettings={() => setActiveView("settings")}
         onRemoveProject={handleRemoveProject}
         onRemoveThread={handleRemoveThread}
       />
@@ -325,18 +329,35 @@ export function WorkspaceShell() {
             </Breadcrumb>
           </div>
           <div className="flex items-center gap-2 px-4">
-            {activeThread ? (
-              <Badge variant="secondary" className="hidden md:inline-flex">
+            {activeThread && activeView === "terminal" ? (
+              <Badge className={`${statusBadgeClassName(activeThread.status)} hidden md:inline-flex`}>
                 {threadStatusLabel[activeThread.status]}
               </Badge>
             ) : null}
-            <Button variant="outline" size="sm" onClick={handleAddProject} disabled={isBusy}>
-              <FolderPlus className="size-4" />
-              Add project
-            </Button>
+            {activeThread && activeView === "terminal" ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleCloseThread(activeThread.id)}
+                disabled={activeThread.status !== "running" || isBusy}
+              >
+                Close
+              </Button>
+            ) : null}
+            {activeThread && activeView === "terminal" ? (
+              <Button size="sm" onClick={() => handleOpenThread(activeThread.id)} disabled={isBusy}>
+                {activeThread.status === "running" ? "Reconnect" : "Open"}
+              </Button>
+            ) : null}
           </div>
         </header>
-        <div className="flex flex-1 flex-col gap-4 bg-transparent p-4 pt-4 text-slate-100">
+        <div
+          className={
+            activeThread && activeView === "terminal"
+              ? "flex flex-1 flex-col bg-transparent text-slate-100"
+              : "flex flex-1 flex-col gap-4 bg-transparent p-4 pt-4 text-slate-100"
+          }
+        >
           {errorMessage ? (
             <Alert variant="destructive" className="border-rose-500/25 bg-rose-950/45 text-rose-100">
               <AlertCircle className="size-4" />
@@ -350,6 +371,24 @@ export function WorkspaceShell() {
               <CardContent className="flex items-center gap-3 p-8">
                 <LoaderCircle className="size-5 animate-spin text-cyan-300" />
                 <span>Loading workspace…</span>
+              </CardContent>
+            </Card>
+          ) : activeView === "settings" ? (
+            <Card className="workspace-muted-panel text-slate-100">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MonitorCog className="size-5 text-cyan-300" />
+                  Settings
+                </CardTitle>
+                <CardDescription className="text-slate-300">
+                  Local runtime information and app preferences.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="rounded-xl border border-slate-800/80 bg-slate-950/45 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Runtime</p>
+                  <p className="mt-2 text-sm text-slate-100">{getRuntimeSubtitle(runtimeInfo, runtime)}</p>
+                </div>
               </CardContent>
             </Card>
           ) : projects.length === 0 ? (
@@ -377,36 +416,7 @@ export function WorkspaceShell() {
               </CardHeader>
             </Card>
           ) : (
-            <Card className="workspace-panel flex min-h-[calc(100vh-8.5rem)] flex-1 flex-col overflow-hidden text-slate-100">
-              <CardHeader className="border-b border-slate-800/90 bg-slate-900/75">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      <SquareTerminal className="size-5 text-cyan-300" />
-                      <span className="truncate">{activeThread.title}</span>
-                    </CardTitle>
-                    <CardDescription className="truncate text-slate-300">
-                      {activeProject?.path}
-                    </CardDescription>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge className={statusBadgeClassName(activeThread.status)}>
-                      {threadStatusLabel[activeThread.status]}
-                    </Badge>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleCloseThread(activeThread.id)}
-                      disabled={activeThread.status !== "running" || isBusy}
-                    >
-                      Close
-                    </Button>
-                    <Button size="sm" onClick={() => handleOpenThread(activeThread.id)} disabled={isBusy}>
-                      {activeThread.status === "running" ? "Reconnect" : "Open"}
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
+            <Card className="workspace-panel flex min-h-0 flex-1 flex-col overflow-hidden rounded-none text-slate-100">
               <CardContent className="relative flex min-h-0 flex-1 flex-col p-0">
                 <TerminalPane
                   threadId={activeThread.id}
@@ -448,6 +458,25 @@ function getErrorMessage(error: unknown, fallback = "Unexpected error while talk
   }
 
   return fallback;
+}
+
+function getRuntimeSubtitle(
+  runtimeInfo: ReturnType<typeof getRuntimeInfo>,
+  runtime = runtimeInfo.runtime
+) {
+  if (runtime) {
+    return `${runtime.platform} · Electron ${runtime.versions.electron}`
+  }
+
+  if (runtimeInfo.isDesktopApp && !runtimeInfo.hasDesktopBridge) {
+    return "Electron desktop · bridge indisponivel"
+  }
+
+  if (runtimeInfo.isDesktopApp) {
+    return "Electron desktop"
+  }
+
+  return "Web browser"
 }
 
 const threadStatusLabel: Record<ThreadStatus, string> = {

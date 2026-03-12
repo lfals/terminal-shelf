@@ -12,7 +12,6 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
-  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
@@ -21,7 +20,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import type { Project, Thread } from "@/lib/workspace-types"
-import { ChevronRight, Folder, FolderPlus, MoreHorizontal, Plus, SquareTerminal, Trash2 } from "lucide-react"
+import { ChevronRight, FolderPlus, MoreHorizontal, Plus, SquareTerminal, Trash2 } from "lucide-react"
 
 interface NavProjectsProps {
   projects: Project[]
@@ -74,32 +73,28 @@ export function NavProjects({
               defaultOpen={isProjectActive}
               className="group/collapsible"
             >
-              <SidebarMenuItem>
+              <SidebarMenuItem className="rounded-md transition-colors hover:bg-slate-900/55">
                 <CollapsibleTrigger asChild>
-                  <SidebarMenuButton tooltip={project.name} isActive={isProjectActive}>
-                    <Folder />
+                  <SidebarMenuButton
+                    tooltip={project.name}
+                    className="rounded-md text-slate-200 hover:bg-transparent hover:text-white group-hover/menu-item:text-white"
+                  >
+                    <ChevronRight className="transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                     <span className="truncate">{project.name}</span>
-                    <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                   </SidebarMenuButton>
                 </CollapsibleTrigger>
                 <div className="flex items-center">
-                  <SidebarMenuAction
-                    showOnHover
-                    onClick={(event) => {
-                      event.preventDefault()
-                      event.stopPropagation()
-                      onCreateThread(project.id)
-                    }}
-                  >
-                    <Plus />
-                    <span className="sr-only">Create thread</span>
-                  </SidebarMenuAction>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <SidebarMenuAction showOnHover>
+                      <button
+                        type="button"
+                        className="absolute top-1.5 right-1 flex aspect-square w-5 items-center justify-center rounded-md p-0 text-sidebar-foreground ring-sidebar-ring outline-hidden transition-transform group-hover/menu-item:text-sidebar-accent-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 md:opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 aria-expanded:opacity-100"
+                        onClick={(event) => event.stopPropagation()}
+                        aria-label="Project actions"
+                      >
                         <MoreHorizontal />
                         <span className="sr-only">Project actions</span>
-                      </SidebarMenuAction>
+                      </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
                       className="w-48 rounded-lg"
@@ -132,10 +127,10 @@ export function NavProjects({
                           <SidebarMenuSubButton
                             isActive={thread.id === activeThreadId}
                             onClick={() => onOpenThread(thread.id)}
-                            className="justify-between"
+                            className="group/thread-button justify-between rounded-md border border-transparent pr-10 text-slate-300 hover:bg-slate-900/55 hover:text-slate-100 data-[active=true]:border-transparent data-[active=true]:bg-slate-800/95 data-[active=true]:text-white"
                           >
                             <span className="truncate">{thread.title}</span>
-                            <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                            <span className="text-[10px] uppercase tracking-[0.18em] text-slate-500 group-data-[active=true]/thread-button:text-cyan-100/75">
                               {thread.status}
                             </span>
                           </SidebarMenuSubButton>
@@ -175,12 +170,6 @@ export function NavProjects({
             </Collapsible>
           )
         })}
-        <SidebarMenuItem>
-          <SidebarMenuButton onClick={onAddProject} className="text-sidebar-foreground/80">
-            <FolderPlus className="text-sidebar-foreground/70" />
-            <span>Add project</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
       </SidebarMenu>
     </SidebarGroup>
   )

@@ -1,32 +1,34 @@
 "use client"
 
 import * as React from "react"
-import { GalleryVerticalEnd } from "lucide-react"
+import { MonitorCog } from "lucide-react"
 
 import { NavProjects } from "@/components/nav-projects"
-import { NavUser } from "@/components/nav-user"
-import { TeamSwitcher } from "@/components/team-switcher"
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import type { DesktopRuntime } from "@/lib/runtime"
+import { cn } from "@/lib/utils"
 import type { Project, Thread } from "@/lib/workspace-types"
+import { TeamSwitcher } from "./team-switcher"
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   projects: Project[]
   threads: Thread[]
   activeThreadId: string | null
-  isDesktopApp?: boolean
-  hasDesktopBridge?: boolean
-  runtime?: DesktopRuntime
+  activeView: "terminal" | "settings"
+  hasMacWindowControlsInset?: boolean
   busy?: boolean
   onAddProject: () => void
   onCreateThread: (projectId: string) => void
   onOpenThread: (threadId: string) => void
+  onOpenSettings: () => void
   onRemoveProject: (projectId: string) => void
   onRemoveThread: (threadId: string) => void
 }
@@ -35,26 +37,26 @@ export function AppSidebar({
   projects,
   threads,
   activeThreadId,
-  isDesktopApp = false,
-  hasDesktopBridge = false,
-  runtime,
+  activeView,
+  hasMacWindowControlsInset,
   busy = false,
   onAddProject,
   onCreateThread,
   onOpenThread,
+  onOpenSettings,
   onRemoveProject,
   onRemoveThread,
   ...props
 }: AppSidebarProps) {
   return (
     <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader>
-        <TeamSwitcher
-          label="Term"
-          description={`${projects.length} projects · ${threads.length} threads`}
-          busy={busy}
-          onAddProject={onAddProject}
-        />
+      <SidebarHeader
+        className={cn(
+          "app-sidebar-header drag-region h-[52px] flex-row items-center gap-2 px-4 py-0",
+          hasMacWindowControlsInset && "pl-20"
+        )}
+      >
+        <TeamSwitcher label="Term" />
       </SidebarHeader>
       <SidebarContent>
         <NavProjects
@@ -70,37 +72,21 @@ export function AppSidebar({
         />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser
-          name="Local Workspace"
-          subtitle={getRuntimeSubtitle({ isDesktopApp, hasDesktopBridge, runtime })}
-          icon={GalleryVerticalEnd}
-        />
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              tooltip="Settings"
+              isActive={activeView === "settings"}
+              onClick={onOpenSettings}
+              className="text-slate-300 hover:bg-slate-900/55 hover:text-white data-[active=true]:bg-slate-900/80 data-[active=true]:text-white"
+            >
+              <MonitorCog />
+              <span>Settings</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   )
-}
-
-function getRuntimeSubtitle({
-  isDesktopApp,
-  hasDesktopBridge,
-  runtime,
-}: {
-  isDesktopApp: boolean
-  hasDesktopBridge: boolean
-  runtime?: DesktopRuntime
-}) {
-  if (runtime) {
-    return `${runtime.platform} · Electron ${runtime.versions.electron}`
-  }
-
-  if (isDesktopApp && !hasDesktopBridge) {
-    return "Electron desktop · bridge indisponivel"
-  }
-
-  if (isDesktopApp) {
-    return "Electron desktop"
-  }
-
-  return "Web browser"
 }

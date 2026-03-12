@@ -154,13 +154,20 @@
       linear-gradient(145deg, rgb(2 6 23 / 0.86), rgb(15 23 42 / 0.72));
   }
 
-  .xterm {
-    height: 100%;
+  .drag-region {
+    -webkit-app-region: drag;
   }
 
-  .xterm-viewport {
-    border-bottom-left-radius: inherit;
-    border-bottom-right-radius: inherit;
+  .no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  .app-sidebar-header.mac-window-inset {
+    padding-left: 90px;
+  }
+
+  .xterm {
+    height: 100%;
   }
 
   .workspace-panel {
