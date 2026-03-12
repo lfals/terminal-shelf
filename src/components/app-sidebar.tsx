@@ -27,10 +27,13 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   busy?: boolean
   onAddProject: () => void
   onCreateThread: (projectId: string) => void
+  onSelectThread: (threadId: string) => void
   onOpenThread: (threadId: string) => void
+  onCloseThread: (threadId: string) => void
   onOpenSettings: () => void
   onRemoveProject: (projectId: string) => void
   onRemoveThread: (threadId: string) => void
+  onRenameThread: (threadId: string, title: string) => void
 }
 
 export function AppSidebar({
@@ -42,10 +45,13 @@ export function AppSidebar({
   busy = false,
   onAddProject,
   onCreateThread,
+  onSelectThread,
   onOpenThread,
+  onCloseThread,
   onOpenSettings,
   onRemoveProject,
   onRemoveThread,
+  onRenameThread,
   ...props
 }: AppSidebarProps) {
   return (
@@ -66,9 +72,12 @@ export function AppSidebar({
           busy={busy}
           onAddProject={onAddProject}
           onCreateThread={onCreateThread}
+          onSelectThread={onSelectThread}
           onOpenThread={onOpenThread}
+          onCloseThread={onCloseThread}
           onRemoveProject={onRemoveProject}
           onRemoveThread={onRemoveThread}
+          onRenameThread={onRenameThread}
         />
       </SidebarContent>
       <SidebarFooter>

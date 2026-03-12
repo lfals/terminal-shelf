@@ -4,6 +4,7 @@ import type {
   TerminalExitEvent,
   TerminalStatusEvent,
   Thread,
+  ThreadUpdatedEvent,
   WorkspaceSnapshot,
 } from "@/lib/workspace-types";
 
@@ -27,9 +28,11 @@ declare global {
       threads: {
         create: (projectId: string) => Promise<Thread>;
         list: (projectId: string) => Promise<Thread[]>;
+        rename: (threadId: string, title: string) => Promise<Thread>;
         open: (threadId: string) => Promise<{ thread: Thread }>;
         close: (threadId: string) => Promise<void>;
         remove: (threadId: string) => Promise<void>;
+        onUpdated: (listener: (payload: ThreadUpdatedEvent) => void) => () => void;
       };
       terminal: {
         write: (threadId: string, data: string) => Promise<void>;

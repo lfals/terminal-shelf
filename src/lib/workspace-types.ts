@@ -1,4 +1,5 @@
 export type ThreadStatus = "idle" | "running" | "closed" | "errored";
+export type ThreadTitleSource = "auto" | "manual";
 
 export interface Project {
   id: string;
@@ -12,6 +13,8 @@ export interface Thread {
   id: string;
   projectId: string;
   title: string;
+  titleSource: ThreadTitleSource;
+  lastAutoTitle: string | null;
   status: ThreadStatus;
   createdAt: string;
   updatedAt: string;
@@ -38,4 +41,8 @@ export interface TerminalExitEvent {
 export interface TerminalStatusEvent {
   threadId: string;
   status: ThreadStatus;
+}
+
+export interface ThreadUpdatedEvent {
+  thread: Thread;
 }
