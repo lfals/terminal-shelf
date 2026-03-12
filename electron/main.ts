@@ -11,6 +11,7 @@ import type {
   TerminalStatusEvent,
   Thread,
   ThreadStatus,
+  ThreadUpdatedEvent,
   WorkspaceSnapshot,
 } from "../src/lib/workspace-types";
 
@@ -19,6 +20,75 @@ type WorkspaceStore = WorkspaceSnapshot;
 const rendererUrl = process.env.ELECTRON_RENDERER_URL;
 const STORE_FILE_NAME = "workspace.json";
 const DEFAULT_TERMINAL_SIZE = { cols: 80, rows: 24 };
+const MAX_THREAD_TITLE_LENGTH = 80;
+
+interface ThreadInputState {
+  buffer: string;
+  cursor: number;
+  escapeSequence: string | null;
+  hasComplexEdit: boolean;
+}
+
+const trimThreadTitle = (value: string) => value.replace(/\s+/g, " ").trim().slice(0, MAX_THREAD_TITLE_LENGTH);
+
+const buildDefaultThreadTitle = (threadCount: number) => `Terminal ${threadCount + 1}`;
+
+const normalizeThreadTitle = (value: string) => trimThreadTitle(value);
+
+const createThreadInputState = (): ThreadInputState => ({
+  buffer: "",
+  cursor: 0,
+  escapeSequence: null,
+  hasComplexEdit: false,
+});
+
+const removePreviousWord = (value: string, cursor: number) => {
+  const beforeCursor = value.slice(0, cursor).replace(/\s+$/, "");
+  const nextCursor = beforeCursor.replace(/\S+$/, "").length;
+
+  return {
+    value: `${beforeCursor.slice(0, nextCursor)}${value.slice(cursor)}`,
+    cursor: nextCursor,
+  };
+};
+
+const isPrintableInput = (character: string) => {
+  const codePoint = character.codePointAt(0);
+  return codePoint !== undefined && codePoint >= 0x20 && codePoint !== 0x7f;
+};
+
+const isEscapeSequenceComplete = (sequence: string) => /[\x40-\x7e]$/.test(sequence);
+
+const applyEscapeSequence = (state: ThreadInputState, sequence: string) => {
+  switch (sequence) {
+    case "\u001b[D":
+      state.cursor = Math.max(0, state.cursor - 1);
+      return;
+    case "\u001b[C":
+      state.cursor = Math.min(state.buffer.length, state.cursor + 1);
+      return;
+    case "\u001b[H":
+    case "\u001bOH":
+      state.cursor = 0;
+      return;
+    case "\u001b[F":
+    case "\u001bOF":
+      state.cursor = state.buffer.length;
+      return;
+    case "\u001b[3~":
+      if (state.cursor < state.buffer.length) {
+        state.buffer = `${state.buffer.slice(0, state.cursor)}${state.buffer.slice(state.cursor + 1)}`;
+      }
+      return;
+    default:
+      state.hasComplexEdit = true;
+  }
+};
+
+const extractCommandTitle = (value: string) => {
+  const normalized = trimThreadTitle(value);
+  return normalized.length > 0 ? normalized : null;
+};
 
 const resolveAppAssetPath = (...segments: string[]) => {
   const candidateRoots = [
@@ -110,6 +180,9 @@ const normalizeLoadedStore = (rawValue: unknown): WorkspaceStore => {
     })),
     threads: threads.map((thread) => ({
       ...thread,
+      title: normalizeThreadTitle(thread.title),
+      titleSource: thread.titleSource === "manual" ? "manual" : "auto",
+      lastAutoTitle: normalizeThreadTitle(thread.lastAutoTitle ?? thread.title),
       status: thread.status === "running" ? "closed" : thread.status,
       lastOpenedAt: thread.lastOpenedAt ?? null,
     })),
@@ -192,10 +265,13 @@ class WorkspaceRepository {
     this.getProject(projectId);
     const threadCount = this.store.threads.filter((thread) => thread.projectId === projectId).length;
     const now = new Date().toISOString();
+    const defaultTitle = buildDefaultThreadTitle(threadCount);
     const thread: Thread = {
       id: randomUUID(),
       projectId,
-      title: `Terminal ${threadCount + 1}`,
+      title: defaultTitle,
+      titleSource: "auto",
+      lastAutoTitle: defaultTitle,
       status: "idle",
       createdAt: now,
       updatedAt: now,
@@ -235,6 +311,66 @@ class WorkspaceRepository {
       status,
       updatedAt: new Date().toISOString(),
     };
+
+    this.store.threads = this.store.threads.map((item) =>
+      item.id === threadId ? updatedThread : item
+    );
+    this.save();
+
+    return updatedThread;
+  }
+
+  renameThread(threadId: string, title: string) {
+    const thread = this.getThread(threadId);
+    const now = new Date().toISOString();
+    const normalizedTitle = normalizeThreadTitle(title);
+
+    const updatedThread: Thread =
+      normalizedTitle.length === 0
+        ? {
+            ...thread,
+            title: thread.lastAutoTitle ?? thread.title,
+            titleSource: "auto",
+            updatedAt: now,
+          }
+        : {
+            ...thread,
+            title: normalizedTitle,
+            titleSource: "manual",
+            updatedAt: now,
+          };
+
+    this.store.threads = this.store.threads.map((item) =>
+      item.id === threadId ? updatedThread : item
+    );
+    this.save();
+
+    return updatedThread;
+  }
+
+  applyAutoThreadTitle(threadId: string, title: string) {
+    const thread = this.getThread(threadId);
+    const normalizedTitle = normalizeThreadTitle(title);
+
+    if (normalizedTitle.length === 0) {
+      return null;
+    }
+
+    const updatedThread: Thread = {
+      ...thread,
+      title: thread.titleSource === "manual" ? thread.title : normalizedTitle,
+      titleSource: thread.titleSource,
+      lastAutoTitle: normalizedTitle,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const hasChanges =
+      updatedThread.title !== thread.title ||
+      updatedThread.lastAutoTitle !== thread.lastAutoTitle;
+
+    if (!hasChanges) {
+      return null;
+    }
 
     this.store.threads = this.store.threads.map((item) =>
       item.id === threadId ? updatedThread : item
@@ -299,6 +435,7 @@ class WorkspaceRepository {
 
 class PtyManager {
   private readonly sessions = new Map<string, IPty>();
+  private readonly inputStates = new Map<string, ThreadInputState>();
 
   constructor(private readonly repository: WorkspaceRepository) {}
 
@@ -308,11 +445,15 @@ class PtyManager {
     const project = this.repository.getProject(thread.projectId);
 
     if (existingSession) {
+      if (!this.inputStates.has(threadId)) {
+        this.inputStates.set(threadId, createThreadInputState());
+      }
       return this.repository.openThread(threadId);
     }
 
     const session = this.spawnForProject(project.path);
     this.sessions.set(threadId, session);
+    this.inputStates.set(threadId, createThreadInputState());
 
     session.onData((data) => {
       this.broadcast<TerminalDataEvent>("terminal:data", {
@@ -323,6 +464,7 @@ class PtyManager {
 
     session.onExit(({ exitCode, signal }) => {
       this.sessions.delete(threadId);
+      this.inputStates.delete(threadId);
 
       try {
         this.repository.closeThread(threadId);
@@ -356,6 +498,7 @@ class PtyManager {
 
     if (session) {
       this.sessions.delete(threadId);
+      this.inputStates.delete(threadId);
       session.kill();
     }
 
@@ -373,6 +516,7 @@ class PtyManager {
 
     if (session) {
       this.sessions.delete(threadId);
+      this.inputStates.delete(threadId);
       session.kill();
     }
   }
@@ -384,6 +528,7 @@ class PtyManager {
       throw new Error("THREAD_NOT_RUNNING");
     }
 
+    this.updateThreadTitleFromInput(threadId, data);
     session.write(data);
   }
 
@@ -397,12 +542,17 @@ class PtyManager {
     session.resize(Math.max(cols, 20), Math.max(rows, 8));
   }
 
+  broadcastThreadUpdated(thread: Thread) {
+    this.broadcast<ThreadUpdatedEvent>("threads:updated", { thread });
+  }
+
   disposeAll() {
     for (const session of this.sessions.values()) {
       session.kill();
     }
 
     this.sessions.clear();
+    this.inputStates.clear();
   }
 
   private spawnForProject(cwd: string) {
@@ -452,6 +602,83 @@ class PtyManager {
   private broadcast<T>(channel: string, payload: T) {
     for (const window of BrowserWindow.getAllWindows()) {
       window.webContents.send(channel, payload);
+    }
+  }
+
+  private updateThreadTitleFromInput(threadId: string, data: string) {
+    const state = this.inputStates.get(threadId) ?? createThreadInputState();
+    this.inputStates.set(threadId, state);
+
+    for (const character of data) {
+      if (state.escapeSequence !== null || character === "\u001b") {
+        state.escapeSequence = `${state.escapeSequence ?? ""}${character}`;
+
+        if (isEscapeSequenceComplete(state.escapeSequence)) {
+          applyEscapeSequence(state, state.escapeSequence);
+          state.escapeSequence = null;
+        }
+
+        continue;
+      }
+
+      switch (character) {
+        case "\r": {
+          const commandTitle = state.hasComplexEdit ? null : extractCommandTitle(state.buffer);
+
+          if (commandTitle) {
+            const updatedThread = this.repository.applyAutoThreadTitle(threadId, commandTitle);
+
+            if (updatedThread && updatedThread.titleSource === "auto") {
+              this.broadcast<ThreadUpdatedEvent>("threads:updated", {
+                thread: updatedThread,
+              });
+            }
+          }
+
+          state.buffer = "";
+          state.cursor = 0;
+          state.hasComplexEdit = false;
+          state.escapeSequence = null;
+          break;
+        }
+        case "\u0003":
+          state.buffer = "";
+          state.cursor = 0;
+          state.hasComplexEdit = false;
+          state.escapeSequence = null;
+          break;
+        case "\u0001":
+          state.cursor = 0;
+          break;
+        case "\u0005":
+          state.cursor = state.buffer.length;
+          break;
+        case "\u0015":
+          state.buffer = "";
+          state.cursor = 0;
+          state.hasComplexEdit = false;
+          break;
+        case "\u0017": {
+          const nextState = removePreviousWord(state.buffer, state.cursor);
+          state.buffer = nextState.value;
+          state.cursor = nextState.cursor;
+          break;
+        }
+        case "\u007f":
+        case "\b":
+          if (state.cursor > 0) {
+            state.buffer = `${state.buffer.slice(0, state.cursor - 1)}${state.buffer.slice(state.cursor)}`;
+            state.cursor -= 1;
+          }
+          break;
+        default:
+          if (!isPrintableInput(character)) {
+            break;
+          }
+
+          state.buffer = `${state.buffer.slice(0, state.cursor)}${character}${state.buffer.slice(state.cursor)}`;
+          state.cursor += character.length;
+      }
     }
   }
 }
@@ -556,6 +783,11 @@ app.whenReady().then(() => {
 
   ipcMain.handle("threads:list", (_event, projectId: string) => repository.listThreads(projectId));
   ipcMain.handle("threads:create", (_event, projectId: string) => repository.createThread(projectId));
+  ipcMain.handle("threads:rename", (_event, threadId: string, title: string) => {
+    const thread = repository.renameThread(threadId, title);
+    ptyManager.broadcastThreadUpdated(thread);
+    return thread;
+  });
   ipcMain.handle("threads:open", (_event, threadId: string) => ({
     thread: ptyManager.openThread(threadId),
   }));

@@ -5,6 +5,7 @@ import type {
   TerminalExitEvent,
   TerminalStatusEvent,
   Thread,
+  ThreadUpdatedEvent,
   WorkspaceSnapshot,
 } from "../src/lib/workspace-types";
 
@@ -38,12 +39,16 @@ contextBridge.exposeInMainWorld("desktop", {
       ipcRenderer.invoke("threads:create", projectId),
     list: (projectId: string): Promise<Thread[]> =>
       ipcRenderer.invoke("threads:list", projectId),
+    rename: (threadId: string, title: string): Promise<Thread> =>
+      ipcRenderer.invoke("threads:rename", threadId, title),
     open: (threadId: string): Promise<{ thread: Thread }> =>
       ipcRenderer.invoke("threads:open", threadId),
     close: (threadId: string): Promise<void> =>
       ipcRenderer.invoke("threads:close", threadId),
     remove: (threadId: string): Promise<void> =>
       ipcRenderer.invoke("threads:remove", threadId),
+    onUpdated: (listener: (payload: ThreadUpdatedEvent) => void) =>
+      onChannel("threads:updated", listener),
   },
   terminal: {
     write: (threadId: string, data: string): Promise<void> =>

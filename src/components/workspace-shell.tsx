@@ -120,10 +120,17 @@ export function WorkspaceShell() {
       });
     });
 
+    const disposeThreadUpdated = desktop.threads.onUpdated(({ thread }) => {
+      startTransition(() => {
+        setThreads((currentThreads) => updateThread(currentThreads, thread));
+      });
+    });
+
     return () => {
       disposeData();
       disposeStatus();
       disposeExit();
+      disposeThreadUpdated();
     };
   }, []);
 
@@ -239,6 +246,14 @@ export function WorkspaceShell() {
     }
   };
 
+  const handleSelectThread = (threadId: string) => {
+    setErrorMessage(null);
+    startTransition(() => {
+      setActiveThreadId(threadId);
+      setActiveView("terminal");
+    });
+  };
+
   const handleCloseThread = async (threadId: string) => {
     const desktop = window.desktop;
 
@@ -254,7 +269,7 @@ export function WorkspaceShell() {
       startTransition(() => {
         setThreads((currentThreads) =>
           currentThreads.map((thread) =>
-            thread.id === threadId ? { ...thread, status: "closed" } : thread
+            thread.id === threadId ? { ...thread, status: "closed", updatedAt: new Date().toISOString() } : thread
           )
         );
       });
@@ -292,6 +307,28 @@ export function WorkspaceShell() {
     }
   };
 
+  const handleRenameThread = async (threadId: string, title: string) => {
+    const desktop = window.desktop;
+
+    if (!desktop) {
+      return;
+    }
+
+    setIsBusy(true);
+    setErrorMessage(null);
+
+    try {
+      const thread = await desktop.threads.rename(threadId, title);
+      startTransition(() => {
+        setThreads((currentThreads) => updateThread(currentThreads, thread));
+      });
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, "Nao foi possivel renomear o terminal."));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   const breadcrumbLabel = activeView === "settings" ? "Workspace" : activeProject?.name ?? "Workspace";
   const breadcrumbDetail = activeView === "settings" ? "Settings" : activeThread?.title ?? "Select a terminal";
 
@@ -306,10 +343,13 @@ export function WorkspaceShell() {
         busy={isBusy}
         onAddProject={handleAddProject}
         onCreateThread={handleCreateThread}
+        onSelectThread={handleSelectThread}
         onOpenThread={handleOpenThread}
+        onCloseThread={handleCloseThread}
         onOpenSettings={() => setActiveView("settings")}
         onRemoveProject={handleRemoveProject}
         onRemoveThread={handleRemoveThread}
+        onRenameThread={handleRenameThread}
       />
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-800/80 bg-slate-950/70 text-slate-100 backdrop-blur-xl transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
@@ -333,21 +373,6 @@ export function WorkspaceShell() {
               <Badge className={`${statusBadgeClassName(activeThread.status)} hidden md:inline-flex`}>
                 {threadStatusLabel[activeThread.status]}
               </Badge>
-            ) : null}
-            {activeThread && activeView === "terminal" ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleCloseThread(activeThread.id)}
-                disabled={activeThread.status !== "running" || isBusy}
-              >
-                Close
-              </Button>
-            ) : null}
-            {activeThread && activeView === "terminal" ? (
-              <Button size="sm" onClick={() => handleOpenThread(activeThread.id)} disabled={isBusy}>
-                {activeThread.status === "running" ? "Reconnect" : "Open"}
-              </Button>
             ) : null}
           </div>
         </header>
@@ -430,11 +455,11 @@ export function WorkspaceShell() {
                         This session is currently {threadStatusLabel[activeThread.status].toLowerCase()}.
                       </p>
                       <p className="mt-2 text-sm text-slate-300">
-                        Open it again to start a new shell in the same project directory.
+                        Reconnect it to resume working in the same project directory.
                       </p>
                       <Button className="mt-4" onClick={() => handleOpenThread(activeThread.id)}>
                         <Plus className="size-4" />
-                        Start new session
+                        Reconnect terminal
                       </Button>
                     </div>
                   </div>
@@ -452,6 +477,10 @@ function getErrorMessage(error: unknown, fallback = "Unexpected error while talk
   if (error instanceof Error) {
     if (error.message === "PROJECT_EXISTS") {
       return "This folder is already registered as a project.";
+    }
+
+    if (error.message.includes("No handler registered for 'threads:rename'")) {
+      return "The Electron main process is outdated. Quit and reopen the app to load the latest terminal rename handler.";
     }
 
     return error.message;
