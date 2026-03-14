@@ -5,6 +5,7 @@ import type {
   TerminalExitEvent,
   TerminalStatusEvent,
   Thread,
+  WorkspaceLayoutNode,
   ThreadUpdatedEvent,
   WorkspaceSnapshot,
 } from "../src/lib/workspace-types";
@@ -65,5 +66,7 @@ contextBridge.exposeInMainWorld("desktop", {
   workspace: {
     getSnapshot: (): Promise<WorkspaceSnapshot> =>
       ipcRenderer.invoke("workspace:getSnapshot"),
+    updateLayout: (layout: WorkspaceLayoutNode | null, activeThreadId: string | null) =>
+      ipcRenderer.invoke("workspace:updateLayout", layout, activeThreadId),
   },
 });

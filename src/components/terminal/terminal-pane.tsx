@@ -10,6 +10,8 @@ interface TerminalPaneProps {
   threadId: string;
   initialData: string;
   status: ThreadStatus;
+  isActive: boolean;
+  onFocus: () => void;
 }
 
 const terminalTheme = {
@@ -37,7 +39,7 @@ const terminalTheme = {
 const systemMonospaceFontStack =
   'ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace';
 
-export function TerminalPane({ threadId, initialData, status }: TerminalPaneProps) {
+export function TerminalPane({ threadId, initialData, status, isActive, onFocus }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const inputDisposableRef = useRef<IDisposable | null>(null);
@@ -158,6 +160,7 @@ export function TerminalPane({ threadId, initialData, status }: TerminalPaneProp
       // Reset attributes before replaying buffered output so a truncated ANSI sequence
       // does not leak broken colors into the restored prompt.
       terminal.write(`\u001b[0m${initialDataRef.current}`);
+      terminal.scrollToBottom();
     }
 
     const syncSize = () => {
@@ -172,10 +175,9 @@ export function TerminalPane({ threadId, initialData, status }: TerminalPaneProp
     const disposeIncoming = desktop.terminal.onData(({ threadId: incomingThreadId, data }) => {
       if (incomingThreadId === threadId) {
         terminal.write(data);
+        terminal.scrollToBottom();
       }
     });
-    terminal.focus();
-
     return () => {
       inputDisposableRef.current?.dispose();
       inputDisposableRef.current = null;
@@ -205,6 +207,7 @@ export function TerminalPane({ threadId, initialData, status }: TerminalPaneProp
 
     inputDisposableRef.current = terminal.onData((data) => {
       void desktop.terminal.write(threadId, data);
+      terminal.scrollToBottom();
     });
 
     terminal.focus();
@@ -215,5 +218,19 @@ export function TerminalPane({ threadId, initialData, status }: TerminalPaneProp
     };
   }, [status, threadId]);
 
-  return <div ref={containerRef} className="h-full min-h-0 w-full" />;
+  useEffect(() => {
+    if (!isActive) {
+      return;
+    }
+
+    terminalRef.current?.focus();
+  }, [isActive]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="size-full min-h-0 min-w-0 flex-1"
+      onMouseDown={onFocus}
+    />
+  );
 }

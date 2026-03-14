@@ -1,5 +1,6 @@
 export type ThreadStatus = "idle" | "running" | "closed" | "errored";
 export type ThreadTitleSource = "auto" | "manual";
+export type SplitDirection = "horizontal" | "vertical";
 
 export interface Project {
   id: string;
@@ -21,10 +22,25 @@ export interface Thread {
   lastOpenedAt: string | null;
 }
 
+export interface WorkspaceLeafNode {
+  type: "leaf";
+  threadId: string;
+}
+
+export interface WorkspaceSplitNode {
+  type: "split";
+  direction: SplitDirection;
+  first: WorkspaceLayoutNode;
+  second: WorkspaceLayoutNode;
+}
+
+export type WorkspaceLayoutNode = WorkspaceLeafNode | WorkspaceSplitNode;
+
 export interface WorkspaceSnapshot {
   projects: Project[];
   threads: Thread[];
   activeThreadId: string | null;
+  layout: WorkspaceLayoutNode | null;
 }
 
 export interface TerminalDataEvent {

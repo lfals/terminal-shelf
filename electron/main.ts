@@ -4,6 +4,13 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFile
 import { basename, join, resolve } from "node:path";
 import os from "node:os";
 import { spawn, type IPty } from "node-pty";
+import {
+  createLeafNode,
+  getFirstThreadId,
+  hasThreadInLayout,
+  normalizeLayout,
+  removeThreadFromLayout,
+} from "../src/lib/workspace-layout";
 import type {
   Project,
   TerminalDataEvent,
@@ -12,6 +19,7 @@ import type {
   Thread,
   ThreadStatus,
   ThreadUpdatedEvent,
+  WorkspaceLayoutNode,
   WorkspaceSnapshot,
 } from "../src/lib/workspace-types";
 
@@ -162,7 +170,41 @@ const createDefaultStore = (): WorkspaceStore => ({
   projects: [],
   threads: [],
   activeThreadId: null,
+  layout: null,
 });
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object";
+
+const parseLayoutNode = (value: unknown): WorkspaceLayoutNode | null => {
+  if (!isRecord(value) || typeof value.type !== "string") {
+    return null;
+  }
+
+  if (value.type === "leaf" && typeof value.threadId === "string") {
+    return createLeafNode(value.threadId);
+  }
+
+  if (value.type === "split") {
+    const direction =
+      value.direction === "horizontal" || value.direction === "vertical" ? value.direction : null;
+    const first = parseLayoutNode(value.first);
+    const second = parseLayoutNode(value.second);
+
+    if (!direction || !first || !second) {
+      return null;
+    }
+
+    return {
+      type: "split",
+      direction,
+      first,
+      second,
+    };
+  }
+
+  return null;
+};
 
 const normalizeLoadedStore = (rawValue: unknown): WorkspaceStore => {
   const fallback = createDefaultStore();
@@ -174,6 +216,22 @@ const normalizeLoadedStore = (rawValue: unknown): WorkspaceStore => {
   const source = rawValue as Partial<WorkspaceStore>;
   const projects = Array.isArray(source.projects) ? source.projects : [];
   const threads = Array.isArray(source.threads) ? source.threads : [];
+  const validThreadIds = new Set(
+    threads
+      .filter((thread): thread is Thread => Boolean(thread && typeof thread.id === "string"))
+      .map((thread) => thread.id)
+  );
+  const legacyActiveThreadId = typeof source.activeThreadId === "string" ? source.activeThreadId : null;
+  const parsedLayout = parseLayoutNode(source.layout);
+  const layout =
+    normalizeLayout(parsedLayout, validThreadIds) ??
+    (legacyActiveThreadId && validThreadIds.has(legacyActiveThreadId)
+      ? createLeafNode(legacyActiveThreadId)
+      : null);
+  const activeThreadId =
+    legacyActiveThreadId && hasThreadInLayout(layout, legacyActiveThreadId)
+      ? legacyActiveThreadId
+      : getFirstThreadId(layout);
 
   return {
     projects: projects.map((project) => ({
@@ -188,7 +246,8 @@ const normalizeLoadedStore = (rawValue: unknown): WorkspaceStore => {
       status: thread.status === "running" ? "closed" : thread.status,
       lastOpenedAt: thread.lastOpenedAt ?? null,
     })),
-    activeThreadId: typeof source.activeThreadId === "string" ? source.activeThreadId : null,
+    activeThreadId,
+    layout,
   };
 };
 
@@ -221,7 +280,21 @@ class WorkspaceRepository {
       projects: this.listProjects(),
       threads: this.listThreads(),
       activeThreadId: this.store.activeThreadId,
+      layout: this.store.layout,
     };
+  }
+
+  updateLayout(layout: WorkspaceLayoutNode | null, activeThreadId: string | null) {
+    const validThreadIds = new Set(this.store.threads.map((thread) => thread.id));
+    const normalized = normalizeLayout(layout, validThreadIds);
+    this.store.layout = normalized;
+    this.store.activeThreadId =
+      activeThreadId && hasThreadInLayout(normalized, activeThreadId)
+        ? activeThreadId
+        : getFirstThreadId(normalized);
+    this.save();
+
+    return this.getSnapshot();
   }
 
   createProject(projectPath: string) {
@@ -254,10 +327,11 @@ class WorkspaceRepository {
       .filter((thread) => thread.projectId === project.id)
       .map((thread) => thread.id);
     this.store.threads = this.store.threads.filter((thread) => thread.projectId !== project.id);
-
-    if (removedThreadIds.includes(this.store.activeThreadId ?? "")) {
-      this.store.activeThreadId = null;
-    }
+    this.store.layout = removedThreadIds.reduce(
+      (currentLayout, threadId) => removeThreadFromLayout(currentLayout, threadId),
+      this.store.layout
+    );
+    this.store.activeThreadId = this.resolveActiveThreadId(this.store.activeThreadId);
 
     this.save();
     return removedThreadIds;
@@ -385,10 +459,10 @@ class WorkspaceRepository {
   removeThread(threadId: string) {
     this.getThread(threadId);
     this.store.threads = this.store.threads.filter((thread) => thread.id !== threadId);
-
-    if (this.store.activeThreadId === threadId) {
-      this.store.activeThreadId = null;
-    }
+    this.store.layout = removeThreadFromLayout(this.store.layout, threadId);
+    this.store.activeThreadId = this.resolveActiveThreadId(
+      this.store.activeThreadId === threadId ? null : this.store.activeThreadId
+    );
 
     this.save();
   }
@@ -432,6 +506,14 @@ class WorkspaceRepository {
 
   private save() {
     writeFileSync(this.filePath, JSON.stringify(this.store, null, 2), "utf8");
+  }
+
+  private resolveActiveThreadId(candidateThreadId: string | null) {
+    if (candidateThreadId && hasThreadInLayout(this.store.layout, candidateThreadId)) {
+      return candidateThreadId;
+    }
+
+    return getFirstThreadId(this.store.layout);
   }
 }
 
@@ -836,6 +918,11 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("workspace:getSnapshot", () => repository.getSnapshot());
+  ipcMain.handle(
+    "workspace:updateLayout",
+    (_event, layout: WorkspaceLayoutNode | null, activeThreadId: string | null) =>
+      repository.updateLayout(layout, activeThreadId)
+  );
 
   ipcMain.handle("projects:list", () => repository.listProjects());
   ipcMain.handle("projects:create", async () => {

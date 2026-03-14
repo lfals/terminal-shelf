@@ -4,6 +4,7 @@ import type {
   TerminalExitEvent,
   TerminalStatusEvent,
   Thread,
+  WorkspaceLayoutNode,
   ThreadUpdatedEvent,
   WorkspaceSnapshot,
 } from "@/lib/workspace-types";
@@ -43,6 +44,7 @@ declare global {
       };
       workspace: {
         getSnapshot: () => Promise<WorkspaceSnapshot>;
+        updateLayout: (layout: WorkspaceLayoutNode | null, activeThreadId: string | null) => Promise<WorkspaceSnapshot>;
       };
     };
   }

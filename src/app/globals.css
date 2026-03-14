@@ -123,13 +123,13 @@
   }
 
   html {
-    @apply font-sans;
+    @apply h-full overflow-hidden font-sans;
   }
   * {
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply h-full overflow-hidden bg-background text-foreground;
     background-image:
       radial-gradient(circle at top left, rgb(34 211 238 / 0.18), transparent 28%),
       radial-gradient(circle at bottom right, rgb(59 130 246 / 0.16), transparent 26%),

@@ -13,7 +13,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import type { Project, Thread } from "@/lib/workspace-types"
+import type { Project, SplitDirection, Thread } from "@/lib/workspace-types"
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   projects: Project[]
@@ -22,8 +22,10 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   activeView: "terminal" | "settings"
   hasMacWindowControlsInset?: boolean
   busy?: boolean
+  splitThreadIds: Set<string>
   onAddProject: () => void
   onCreateThread: (projectId: string) => void
+  onClosePane: () => void
   onSelectThread: (threadId: string) => void
   onOpenThread: (threadId: string) => void
   onCloseThread: (threadId: string) => void
@@ -31,6 +33,8 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onRemoveProject: (projectId: string) => void
   onRemoveThread: (threadId: string) => void
   onRenameThread: (threadId: string, title: string) => void
+  onSplitThreadWithNew: (direction: SplitDirection) => void
+  onSplitThreadWithActive: (threadId: string, direction: SplitDirection) => void
 }
 
 export function AppSidebar({
@@ -39,8 +43,10 @@ export function AppSidebar({
   activeThreadId,
   activeView,
   busy = false,
+  splitThreadIds,
   onAddProject,
   onCreateThread,
+  onClosePane,
   onSelectThread,
   onOpenThread,
   onCloseThread,
@@ -48,6 +54,8 @@ export function AppSidebar({
   onRemoveProject,
   onRemoveThread,
   onRenameThread,
+  onSplitThreadWithNew,
+  onSplitThreadWithActive,
   ...props
 }: AppSidebarProps) {
   return (
@@ -58,14 +66,18 @@ export function AppSidebar({
           threads={threads}
           activeThreadId={activeThreadId}
           busy={busy}
+          splitThreadIds={splitThreadIds}
           onAddProject={onAddProject}
           onCreateThread={onCreateThread}
+          onClosePane={onClosePane}
           onSelectThread={onSelectThread}
           onOpenThread={onOpenThread}
           onCloseThread={onCloseThread}
           onRemoveProject={onRemoveProject}
           onRemoveThread={onRemoveThread}
           onRenameThread={onRenameThread}
+          onSplitThreadWithNew={onSplitThreadWithNew}
+          onSplitThreadWithActive={onSplitThreadWithActive}
         />
       </SidebarContent>
       <SidebarFooter>

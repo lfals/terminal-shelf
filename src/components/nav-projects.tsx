@@ -31,7 +31,7 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import type { Project, Thread } from "@/lib/workspace-types"
+import type { Project, SplitDirection, Thread } from "@/lib/workspace-types"
 import { ChevronRight, FolderPlus, MoreHorizontal, Pencil, Plus, SquareTerminal, Trash2 } from "lucide-react"
 
 interface NavProjectsProps {
@@ -39,14 +39,18 @@ interface NavProjectsProps {
   threads: Thread[]
   activeThreadId: string | null
   busy?: boolean
+  splitThreadIds: Set<string>
   onAddProject: () => void
   onCreateThread: (projectId: string) => void
+  onClosePane: () => void
   onSelectThread: (threadId: string) => void
   onOpenThread: (threadId: string) => void
   onCloseThread: (threadId: string) => void
   onRemoveProject: (projectId: string) => void
   onRemoveThread: (threadId: string) => void
   onRenameThread: (threadId: string, title: string) => void
+  onSplitThreadWithNew: (direction: SplitDirection) => void
+  onSplitThreadWithActive: (threadId: string, direction: SplitDirection) => void
 }
 
 export function NavProjects({
@@ -54,14 +58,18 @@ export function NavProjects({
   threads,
   activeThreadId,
   busy = false,
+  splitThreadIds,
   onAddProject,
   onCreateThread,
+  onClosePane,
   onSelectThread,
   onOpenThread,
   onCloseThread,
   onRemoveProject,
   onRemoveThread,
   onRenameThread,
+  onSplitThreadWithNew,
+  onSplitThreadWithActive,
 }: NavProjectsProps) {
   const { isMobile } = useSidebar()
   const [renameThreadId, setRenameThreadId] = useState<string | null>(null)
@@ -179,6 +187,8 @@ export function NavProjects({
                         projectThreads.map((thread) => (
                           (() => {
                             const isRunning = thread.status === "running"
+                            const isActiveThread = thread.id === activeThreadId
+                            const canSplitWithActiveThread = Boolean(activeThreadId) && !isActiveThread
                             const primaryThreadActionLabel = isRunning ? "Close terminal" : "Reconnect terminal"
                             const primaryThreadAction = isRunning
                               ? () => onCloseThread(thread.id)
@@ -187,11 +197,23 @@ export function NavProjects({
                             return (
                               <SidebarMenuSubItem key={thread.id} className="group/subitem relative">
                                 <SidebarMenuSubButton
-                                  isActive={thread.id === activeThreadId}
+                                  isActive={isActiveThread}
                                   onClick={() => onSelectThread(thread.id)}
                                   className="group/thread-button justify-between rounded-md border border-transparent pr-10 text-slate-300 hover:bg-slate-900/55 hover:text-slate-100 data-[active=true]:border-transparent data-[active=true]:bg-slate-800/95 data-[active=true]:text-white"
                                 >
-                                  <span className="truncate">{thread.title}</span>
+                                  <span className="flex min-w-0 items-center gap-2">
+                                    {splitThreadIds.has(thread.id) ? (
+                                      <span
+                                        aria-label="Split terminal"
+                                        title="Split terminal"
+                                        className="inline-flex h-3.5 w-3.5 items-center gap-px rounded-[3px] border border-cyan-400/60 p-[2px]"
+                                      >
+                                        <span className="h-full flex-1 rounded-[1px] bg-cyan-300/80" />
+                                        <span className="h-full flex-1 rounded-[1px] bg-cyan-300/35" />
+                                      </span>
+                                    ) : null}
+                                    <span className="truncate">{thread.title}</span>
+                                  </span>
                                   <span className="text-[10px] uppercase tracking-[0.18em] text-slate-500 group-data-[active=true]/thread-button:text-cyan-100/75">
                                     {thread.status}
                                   </span>
@@ -216,6 +238,35 @@ export function NavProjects({
                                       <SquareTerminal className="text-muted-foreground" />
                                       <span>{primaryThreadActionLabel}</span>
                                     </DropdownMenuItem>
+                                    {isActiveThread ? (
+                                      <>
+                                        <DropdownMenuItem onClick={() => onSplitThreadWithNew("vertical")} disabled={busy}>
+                                          <span>Split vertical</span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => onSplitThreadWithNew("horizontal")} disabled={busy}>
+                                          <span>Split horizontal</span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={onClosePane} disabled={busy}>
+                                          <span>Close pane</span>
+                                        </DropdownMenuItem>
+                                      </>
+                                    ) : null}
+                                    {canSplitWithActiveThread ? (
+                                      <>
+                                        <DropdownMenuItem
+                                          onClick={() => onSplitThreadWithActive(thread.id, "vertical")}
+                                          disabled={busy}
+                                        >
+                                          <span>Split vertical with active</span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onClick={() => onSplitThreadWithActive(thread.id, "horizontal")}
+                                          disabled={busy}
+                                        >
+                                          <span>Split horizontal with active</span>
+                                        </DropdownMenuItem>
+                                      </>
+                                    ) : null}
                                     <DropdownMenuItem onClick={() => openRenameDialog(thread)} disabled={busy}>
                                       <Pencil className="text-muted-foreground" />
                                       <span>Rename terminal</span>
