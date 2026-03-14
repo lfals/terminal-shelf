@@ -34,6 +34,9 @@ const terminalTheme = {
   brightWhite: "#f8fbff",
 };
 
+const systemMonospaceFontStack =
+  'ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace';
+
 export function TerminalPane({ threadId, initialData, status }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -55,7 +58,7 @@ export function TerminalPane({ threadId, initialData, status }: TerminalPaneProp
     const terminal = new Terminal({
       convertEol: true,
       cursorBlink: true,
-      fontFamily: "var(--font-mono), 'SFMono-Regular', monospace",
+      fontFamily: systemMonospaceFontStack,
       fontSize: 13,
       lineHeight: 1.35,
       scrollback: 5000,
