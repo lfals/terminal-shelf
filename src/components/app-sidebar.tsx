@@ -8,15 +8,12 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { cn } from "@/lib/utils"
 import type { Project, Thread } from "@/lib/workspace-types"
-import { TeamSwitcher } from "./team-switcher"
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   projects: Project[]
@@ -41,7 +38,6 @@ export function AppSidebar({
   threads,
   activeThreadId,
   activeView,
-  hasMacWindowControlsInset,
   busy = false,
   onAddProject,
   onCreateThread,
@@ -56,14 +52,6 @@ export function AppSidebar({
 }: AppSidebarProps) {
   return (
     <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader
-        className={cn(
-          "app-sidebar-header drag-region h-[52px] flex-row items-center gap-2 px-4 py-0",
-          hasMacWindowControlsInset && "pl-20"
-        )}
-      >
-        <TeamSwitcher label="Term" />
-      </SidebarHeader>
       <SidebarContent>
         <NavProjects
           projects={projects}
