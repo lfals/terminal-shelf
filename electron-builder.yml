@@ -5,6 +5,8 @@ directories:
 files:
   - out/**/*
   - .electron/**/*
+  - public/logo-term.png
+  - public/logo-term-dev.png
   - package.json
 asar: true
 asarUnpack:

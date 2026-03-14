@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, shell } from "electron";
 import { randomUUID } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
@@ -21,6 +21,8 @@ const rendererUrl = process.env.ELECTRON_RENDERER_URL;
 const STORE_FILE_NAME = "workspace.json";
 const DEFAULT_TERMINAL_SIZE = { cols: 80, rows: 24 };
 const MAX_THREAD_TITLE_LENGTH = 80;
+const isDevelopmentMode = Boolean(rendererUrl);
+const appDisplayName = isDevelopmentMode ? "Term Shelf - Dev" : "Term";
 
 interface ThreadInputState {
   buffer: string;
@@ -689,9 +691,72 @@ class PtyManager {
 
 let repository: WorkspaceRepository;
 let ptyManager: PtyManager;
+let tray: Tray | null = null;
+
+function resolveIconAssetPath() {
+  return resolveAppAssetPath("public", isDevelopmentMode ? "logo-term-dev.png" : "logo-term.png");
+}
+
+function createTrayIconImage() {
+  const image = nativeImage.createFromPath(resolveIconAssetPath());
+
+  if (image.isEmpty()) {
+    throw new Error(`Tray icon not found at ${resolveIconAssetPath()}.`);
+  }
+
+  if (process.platform === "darwin") {
+    return image.resize({ width: 18, height: 18 });
+  }
+
+  return image.resize({ width: 32, height: 32 });
+}
+
+function ensureTray(mainWindow: BrowserWindow) {
+  if (tray) {
+    tray.setImage(createTrayIconImage());
+    return tray;
+  }
+
+  tray = new Tray(createTrayIconImage());
+  tray.setToolTip(appDisplayName);
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      {
+        label: `Show ${appDisplayName}`,
+        click: () => {
+          if (mainWindow.isMinimized()) {
+            mainWindow.restore();
+          }
+          mainWindow.show();
+          mainWindow.focus();
+        },
+      },
+      {
+        label: "Quit",
+        click: () => app.quit(),
+      },
+    ])
+  );
+  tray.on("click", () => {
+    if (mainWindow.isVisible() && mainWindow.isFocused()) {
+      mainWindow.hide();
+      return;
+    }
+
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
+
+    mainWindow.show();
+    mainWindow.focus();
+  });
+
+  return tray;
+}
 
 function createMainWindow() {
   const preloadScript = resolveAppAssetPath(".electron", "preload.js");
+  const iconPath = resolveIconAssetPath();
 
   if (!existsSync(preloadScript)) {
     throw new Error(
@@ -705,6 +770,8 @@ function createMainWindow() {
     minWidth: 1080,
     minHeight: 720,
     backgroundColor: "#0a0f1e",
+    icon: iconPath,
+    title: appDisplayName,
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     webPreferences: {
       preload: preloadScript,
@@ -729,6 +796,13 @@ function createMainWindow() {
       event.preventDefault();
     }
   });
+
+  if (process.platform === "darwin") {
+    app.setName(appDisplayName);
+    app.dock.setIcon(iconPath);
+  }
+
+  ensureTray(mainWindow);
 
   if (rendererUrl) {
     void mainWindow.loadURL(rendererUrl);
@@ -820,6 +894,8 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", () => {
+  tray?.destroy();
+  tray = null;
   ptyManager?.disposeAll();
 });
 
