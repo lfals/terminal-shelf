@@ -556,10 +556,14 @@ class PtyManager {
   }
 
   private spawnForProject(cwd: string) {
+    const locale = process.env.LC_ALL || process.env.LC_CTYPE || process.env.LANG || "en_US.UTF-8";
     const env = {
       ...process.env,
       TERM: "xterm-256color",
       COLORTERM: "truecolor",
+      LANG: locale,
+      LC_ALL: locale,
+      LC_CTYPE: locale,
     };
 
     const candidates =

@@ -55,20 +55,104 @@ export function TerminalPane({ threadId, initialData, status }: TerminalPaneProp
       return;
     }
 
+    const isMacOS = /Mac|iPhone|iPad|iPod/i.test(navigator.platform);
     const terminal = new Terminal({
       convertEol: true,
       cursorBlink: true,
       fontFamily: systemMonospaceFontStack,
       fontSize: 13,
       lineHeight: 1.35,
+      macOptionIsMeta: isMacOS ? false : undefined,
       scrollback: 5000,
       theme: terminalTheme,
     });
     const fitAddon = new FitAddon();
+    const altInputState = {
+      handled: false,
+      pending: false,
+    };
 
     terminal.loadAddon(fitAddon);
     terminal.open(container);
     terminalRef.current = terminal;
+
+    const textarea = terminal.textarea;
+    const updateAltPending = (event: KeyboardEvent) => {
+      altInputState.pending = isMacOS && event.altKey && !event.ctrlKey && !event.metaKey;
+
+      if (!altInputState.pending) {
+        altInputState.handled = false;
+      }
+    };
+    const resetAltPending = () => {
+      altInputState.pending = false;
+      altInputState.handled = false;
+    };
+    const handleAltBeforeInput = (event: InputEvent) => {
+      if (!altInputState.pending || event.isComposing) {
+        return;
+      }
+
+      const text = event.data ?? "";
+
+      if (!text || /[\u0000-\u001f\u007f]/.test(text)) {
+        return;
+      }
+
+      event.preventDefault();
+      altInputState.handled = true;
+      altInputState.pending = false;
+      if (textarea) {
+        textarea.value = "";
+      }
+      void desktop.terminal.write(threadId, text);
+    };
+    const handleAltInput = (event: Event) => {
+      if (!altInputState.pending || altInputState.handled) {
+        return;
+      }
+
+      const target = event.currentTarget;
+
+      if (!(target instanceof HTMLTextAreaElement)) {
+        return;
+      }
+
+      const text = target.value;
+
+      if (!text || /[\u0000-\u001f\u007f]/.test(text)) {
+        return;
+      }
+
+      altInputState.pending = false;
+      target.value = "";
+      void desktop.terminal.write(threadId, text);
+    };
+
+    textarea?.addEventListener("keydown", updateAltPending);
+    textarea?.addEventListener("keyup", resetAltPending);
+    textarea?.addEventListener("blur", resetAltPending);
+    textarea?.addEventListener("beforeinput", handleAltBeforeInput);
+    textarea?.addEventListener("input", handleAltInput);
+    terminal.attachCustomKeyEventHandler((event) => {
+      if (
+        !isMacOS ||
+        event.type !== "keydown" ||
+        !event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.key.length !== 1 ||
+        /[\u0000-\u001f\u007f]/.test(event.key)
+      ) {
+        return true;
+      }
+
+      altInputState.handled = true;
+      altInputState.pending = false;
+      void desktop.terminal.write(threadId, event.key);
+      event.preventDefault();
+      return false;
+    });
 
     if (initialDataRef.current) {
       // Reset attributes before replaying buffered output so a truncated ANSI sequence
@@ -98,6 +182,11 @@ export function TerminalPane({ threadId, initialData, status }: TerminalPaneProp
       window.cancelAnimationFrame(frame);
       resizeObserver.disconnect();
       disposeIncoming();
+      textarea?.removeEventListener("keydown", updateAltPending);
+      textarea?.removeEventListener("keyup", resetAltPending);
+      textarea?.removeEventListener("blur", resetAltPending);
+      textarea?.removeEventListener("beforeinput", handleAltBeforeInput);
+      textarea?.removeEventListener("input", handleAltInput);
       terminalRef.current = null;
       terminal.dispose();
     };
