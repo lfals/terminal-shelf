@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { FitAddon } from "@xterm/addon-fit";
-import { Terminal } from "@xterm/xterm";
+import { Terminal, type IDisposable } from "@xterm/xterm";
 
 import type { ThreadStatus } from "@/lib/workspace-types";
 
@@ -36,6 +36,13 @@ const terminalTheme = {
 
 export function TerminalPane({ threadId, initialData, status }: TerminalPaneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const terminalRef = useRef<Terminal | null>(null);
+  const inputDisposableRef = useRef<IDisposable | null>(null);
+  const initialDataRef = useRef(initialData);
+
+  useEffect(() => {
+    initialDataRef.current = initialData;
+  }, [initialData]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -58,9 +65,12 @@ export function TerminalPane({ threadId, initialData, status }: TerminalPaneProp
 
     terminal.loadAddon(fitAddon);
     terminal.open(container);
+    terminalRef.current = terminal;
 
-    if (initialData) {
-      terminal.write(initialData);
+    if (initialDataRef.current) {
+      // Reset attributes before replaying buffered output so a truncated ANSI sequence
+      // does not leak broken colors into the restored prompt.
+      terminal.write(`\u001b[0m${initialDataRef.current}`);
     }
 
     const syncSize = () => {
@@ -77,22 +87,41 @@ export function TerminalPane({ threadId, initialData, status }: TerminalPaneProp
         terminal.write(data);
       }
     });
-
-    const inputDisposable =
-      status === "running"
-        ? terminal.onData((data) => {
-            void desktop.terminal.write(threadId, data);
-          })
-        : null;
+    terminal.focus();
 
     return () => {
+      inputDisposableRef.current?.dispose();
+      inputDisposableRef.current = null;
       window.cancelAnimationFrame(frame);
       resizeObserver.disconnect();
       disposeIncoming();
-      inputDisposable?.dispose();
+      terminalRef.current = null;
       terminal.dispose();
     };
-  }, [initialData, status, threadId]);
+  }, [threadId]);
+
+  useEffect(() => {
+    const desktop = window.desktop;
+    const terminal = terminalRef.current;
+
+    inputDisposableRef.current?.dispose();
+    inputDisposableRef.current = null;
+
+    if (!desktop || !terminal || status !== "running") {
+      return;
+    }
+
+    inputDisposableRef.current = terminal.onData((data) => {
+      void desktop.terminal.write(threadId, data);
+    });
+
+    terminal.focus();
+
+    return () => {
+      inputDisposableRef.current?.dispose();
+      inputDisposableRef.current = null;
+    };
+  }, [status, threadId]);
 
   return <div ref={containerRef} className="h-full min-h-0 w-full" />;
 }

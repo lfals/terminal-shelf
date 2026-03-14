@@ -18,8 +18,21 @@ import type { Project, Thread, ThreadStatus, WorkspaceSnapshot } from "@/lib/wor
 const MAX_BUFFER_SIZE = 200_000;
 type MainView = "terminal" | "settings";
 
-const trimBuffer = (value: string) =>
-  value.length > MAX_BUFFER_SIZE ? value.slice(value.length - MAX_BUFFER_SIZE) : value;
+const trimBuffer = (value: string) => {
+  if (value.length <= MAX_BUFFER_SIZE) {
+    return value;
+  }
+
+  const sliceStart = value.length - MAX_BUFFER_SIZE;
+  const newlineStart = value.indexOf("\n", sliceStart);
+  const candidate =
+    newlineStart >= 0 && newlineStart + 1 < value.length
+      ? value.slice(newlineStart + 1)
+      : value.slice(sliceStart);
+
+  // Drop a partial ANSI/OSC sequence if trimming started in the middle of one.
+  return candidate.replace(/^(?:\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)?|\u001b(?:\[[0-?]*[ -/]*[@-~]?|[@-_]?))/, "");
+};
 
 const updateThread = (threads: Thread[], nextThread: Thread) =>
   threads.map((thread) => (thread.id === nextThread.id ? nextThread : thread));
