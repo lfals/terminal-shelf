@@ -75,10 +75,7 @@ jobs:
 
   package:
     name: ${{ matrix.platform.name }}
-    if: startsWith(github.ref, 'refs/tags/')
-    needs:
-      - validate
-      - validate-release-tag
+    needs: validate
     runs-on: ${{ matrix.platform.runner }}
     defaults:
       run:
@@ -123,6 +120,24 @@ jobs:
       - name: Build application
         run: bun run build
 
+      - name: Validate Epoch SemVer tag
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          VERSION="${TAG_NAME#v}"
+
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Tag must use Epoch SemVer format: <epoch-major>.minor.patch or v<epoch-major>.minor.patch"
+            exit 1
+          fi
+
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          if [[ "$VERSION" != "$PACKAGE_VERSION" ]]; then
+            echo "Tag version ($VERSION) does not match package.json version ($PACKAGE_VERSION)."
+            exit 1
+          fi
+
       - name: Package installer
         run: |
           rm -rf release
@@ -139,7 +154,9 @@ jobs:
   publish-release:
     name: Publish GitHub Release
     if: startsWith(github.ref, 'refs/tags/')
-    needs: package
+    needs:
+      - validate-release-tag
+      - package
     runs-on: ubuntu-24.04
     steps:
       - name: Download packaged installers
