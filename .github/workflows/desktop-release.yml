@@ -159,6 +159,9 @@ jobs:
       - package
     runs-on: ubuntu-24.04
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
       - name: Download packaged installers
         uses: actions/download-artifact@v4
         with:
