@@ -60,7 +60,7 @@ jobs:
         run: |
           VERSION="${TAG_NAME#v}"
 
-          if [[ ! "$VERSION" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Tag must use Epoch SemVer format: <epoch-major>.minor.patch or v<epoch-major>.minor.patch"
             exit 1
           fi
