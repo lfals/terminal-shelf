@@ -126,7 +126,11 @@ export function WorkspaceShell() {
   });
 
   const handleCloseShortcut = useEffectEvent(() => {
-    void handleCloseActivePane();
+    if (!activeThreadId) {
+      return;
+    }
+
+    void handleRemoveThread(activeThreadId);
   });
 
   useEffect(() => {
