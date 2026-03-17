@@ -13,7 +13,8 @@
     "build:electron": "bun build ./electron/main.ts ./electron/preload.ts --outdir ./.electron --target=node --format=cjs --external electron --external node-pty",
     "start": "electron .electron/main.js",
     "dist": "bun run build && electron-builder --config electron-builder.yml",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "release:tag": "bun run ./scripts/release-tag.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
