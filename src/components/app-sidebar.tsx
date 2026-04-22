@@ -13,17 +13,22 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import type { Project, SplitDirection, Thread } from "@/lib/workspace-types"
+import type { Project, ProjectGroup, SplitDirection, Thread } from "@/lib/workspace-types"
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   projects: Project[]
+  groups: ProjectGroup[]
   threads: Thread[]
   activeThreadId: string | null
   activeView: "terminal" | "settings"
   hasMacWindowControlsInset?: boolean
   busy?: boolean
   splitThreadIds: Set<string>
-  onAddProject: () => void
+  onAddProject: (groupId?: string | null) => void
+  onCreateGroup: (name: string) => void
+  onRenameGroup: (groupId: string, name: string) => void
+  onRemoveGroup: (groupId: string) => void
+  onMoveProjectToGroup: (projectId: string, groupId: string | null) => void
   onCreateThread: (projectId: string) => void
   onClosePane: () => void
   onSelectThread: (threadId: string) => void
@@ -39,12 +44,17 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 
 export function AppSidebar({
   projects,
+  groups,
   threads,
   activeThreadId,
   activeView,
   busy = false,
   splitThreadIds,
   onAddProject,
+  onCreateGroup,
+  onRenameGroup,
+  onRemoveGroup,
+  onMoveProjectToGroup,
   onCreateThread,
   onClosePane,
   onSelectThread,
@@ -63,11 +73,16 @@ export function AppSidebar({
       <SidebarContent>
         <NavProjects
           projects={projects}
+          groups={groups}
           threads={threads}
           activeThreadId={activeThreadId}
           busy={busy}
           splitThreadIds={splitThreadIds}
           onAddProject={onAddProject}
+          onCreateGroup={onCreateGroup}
+          onRenameGroup={onRenameGroup}
+          onRemoveGroup={onRemoveGroup}
+          onMoveProjectToGroup={onMoveProjectToGroup}
           onCreateThread={onCreateThread}
           onClosePane={onClosePane}
           onSelectThread={onSelectThread}

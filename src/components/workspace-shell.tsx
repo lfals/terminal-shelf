@@ -6,6 +6,14 @@ import { AlertCircle, FolderPlus, LoaderCircle, MonitorCog, Plus, X } from "luci
 import { AppSidebar } from "@/components/app-sidebar";
 import { TerminalPane } from "@/components/terminal/terminal-pane";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
@@ -23,6 +31,7 @@ import {
 import { getRuntimeInfo } from "@/lib/runtime";
 import type {
   Project,
+  ProjectGroup,
   SplitDirection,
   Thread,
   ThreadStatus,
@@ -64,6 +73,7 @@ const resolveNextActiveThreadId = (
 
 export function WorkspaceShell() {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [groups, setGroups] = useState<ProjectGroup[]>([]);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [layout, setLayout] = useState<WorkspaceLayoutNode | null>(null);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
@@ -72,6 +82,10 @@ export function WorkspaceShell() {
   const [isLoading, setIsLoading] = useState(true);
   const [isBusy, setIsBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [pendingMoveProject, setPendingMoveProject] = useState<{
+    project: Project;
+    targetGroupId: string;
+  } | null>(null);
   const terminalBuffersRef = useRef<Record<string, string>>({});
 
   const activeThread = useMemo(
@@ -91,10 +105,11 @@ export function WorkspaceShell() {
 
   const applySnapshot = (snapshot: WorkspaceSnapshot) => {
     startTransition(() => {
-      setProjects(snapshot.projects);
-      setThreads(snapshot.threads);
-      setLayout(snapshot.layout);
-      setActiveThreadId(snapshot.activeThreadId);
+      setGroups(snapshot.groups ?? []);
+      setProjects(snapshot.projects ?? []);
+      setThreads(snapshot.threads ?? []);
+      setLayout(snapshot.layout ?? null);
+      setActiveThreadId(snapshot.activeThreadId ?? null);
     });
   };
 
@@ -255,7 +270,7 @@ export function WorkspaceShell() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activeThreadId, activeView, isBusy]);
 
-  const handleAddProject = async () => {
+  const handleAddProject = async (groupId?: string | null) => {
     const desktop = window.desktop;
 
     if (!desktop) {
@@ -266,18 +281,28 @@ export function WorkspaceShell() {
     setErrorMessage(null);
 
     try {
-      const project = await desktop.projects.create();
+      const result = await desktop.projects.create();
 
-      if (!project) {
+      if (!result) {
         return;
       }
 
-      startTransition(() => {
-        setProjects((currentProjects) => [...currentProjects, project]);
-      });
+      const { project, isNew } = result;
+
+      if (isNew) {
+        let finalProject = project;
+        if (groupId) {
+          finalProject = await desktop.projects.moveToGroup(project.id, groupId);
+        }
+        startTransition(() => {
+          setProjects((currentProjects) => [...currentProjects, finalProject]);
+        });
+      } else if (groupId && project.groupId !== groupId) {
+        setPendingMoveProject({ project, targetGroupId: groupId });
+      }
     } catch (error) {
       setErrorMessage(
-        getErrorMessage(error, "Não foi possível adicionar o projeto. Verifique se a pasta já existe na lista.")
+        getErrorMessage(error, "Não foi possível adicionar o projeto.")
       );
     } finally {
       setIsBusy(false);
@@ -320,6 +345,103 @@ export function WorkspaceShell() {
         setThreads(nextThreads);
         setLayout(nextLayout);
         setActiveThreadId(nextActiveThreadId);
+      });
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleCreateGroup = async (name: string) => {
+    const desktop = window.desktop;
+
+    if (!desktop) {
+      return;
+    }
+
+    setIsBusy(true);
+    setErrorMessage(null);
+
+    try {
+      const group = await desktop.groups.create(name);
+      startTransition(() => {
+        setGroups((currentGroups) => [...currentGroups, group]);
+      });
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleRenameGroup = async (groupId: string, name: string) => {
+    const desktop = window.desktop;
+
+    if (!desktop) {
+      return;
+    }
+
+    setIsBusy(true);
+    setErrorMessage(null);
+
+    try {
+      const group = await desktop.groups.rename(groupId, name);
+      startTransition(() => {
+        setGroups((currentGroups) =>
+          currentGroups.map((item) => (item.id === group.id ? group : item))
+        );
+      });
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleRemoveGroup = async (groupId: string) => {
+    const desktop = window.desktop;
+
+    if (!desktop) {
+      return;
+    }
+
+    setIsBusy(true);
+    setErrorMessage(null);
+
+    try {
+      await desktop.groups.remove(groupId);
+      startTransition(() => {
+        setGroups((currentGroups) => currentGroups.filter((item) => item.id !== groupId));
+        setProjects((currentProjects) =>
+          currentProjects.map((project) =>
+            project.groupId === groupId ? { ...project, groupId: null } : project
+          )
+        );
+      });
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleMoveProjectToGroup = async (projectId: string, groupId: string | null) => {
+    const desktop = window.desktop;
+
+    if (!desktop) {
+      return;
+    }
+
+    setIsBusy(true);
+    setErrorMessage(null);
+
+    try {
+      const project = await desktop.projects.moveToGroup(projectId, groupId);
+      startTransition(() => {
+        setProjects((currentProjects) =>
+          currentProjects.map((item) => (item.id === project.id ? project : item))
+        );
       });
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -683,10 +805,18 @@ export function WorkspaceShell() {
     );
   };
 
+  const pendingTargetGroup = pendingMoveProject
+    ? groups.find((g) => g.id === pendingMoveProject.targetGroupId)
+    : null;
+  const pendingCurrentGroup = pendingMoveProject?.project.groupId
+    ? groups.find((g) => g.id === pendingMoveProject.project.groupId)
+    : null;
+
   return (
     <SidebarProvider className="h-dvh max-h-dvh overflow-hidden">
       <AppSidebar
         projects={projects}
+        groups={groups}
         threads={threads}
         activeThreadId={activeThreadId}
         activeView={activeView}
@@ -694,6 +824,10 @@ export function WorkspaceShell() {
         busy={isBusy}
         splitThreadIds={splitThreadIds}
         onAddProject={handleAddProject}
+        onCreateGroup={handleCreateGroup}
+        onRenameGroup={handleRenameGroup}
+        onRemoveGroup={handleRemoveGroup}
+        onMoveProjectToGroup={handleMoveProjectToGroup}
         onCreateThread={handleCreateThread}
         onSelectThread={handleSelectThread}
         onOpenThread={handleOpenThread}
@@ -820,7 +954,7 @@ export function WorkspaceShell() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button onClick={handleAddProject} disabled={isBusy}>
+                <Button onClick={() => void handleAddProject()} disabled={isBusy}>
                   <FolderPlus className="size-4" />
                   Add first project
                 </Button>
@@ -842,6 +976,46 @@ export function WorkspaceShell() {
           )}
         </div>
       </SidebarInset>
+      <AlertDialog
+        open={pendingMoveProject !== null}
+        onOpenChange={(open) => { if (!open) setPendingMoveProject(null); }}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mover projeto</AlertDialogTitle>
+            <AlertDialogDescription>
+              O projeto <strong>{pendingMoveProject?.project.name}</strong> já está{" "}
+              {pendingCurrentGroup
+                ? <>no grupo <strong>{pendingCurrentGroup.name}</strong></>
+                : "na raiz"}
+              . Deseja movê-lo para o grupo{" "}
+              <strong>{pendingTargetGroup?.name}</strong>?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPendingMoveProject(null)}
+              disabled={isBusy}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              disabled={isBusy}
+              onClick={() => {
+                if (!pendingMoveProject) return;
+                const { project, targetGroupId } = pendingMoveProject;
+                setPendingMoveProject(null);
+                void handleMoveProjectToGroup(project.id, targetGroupId);
+              }}
+            >
+              Mover
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SidebarProvider>
   );
 }

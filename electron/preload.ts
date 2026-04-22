@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
   Project,
+  ProjectGroup,
   TerminalDataEvent,
   TerminalExitEvent,
   TerminalStatusEvent,
@@ -31,9 +32,20 @@ contextBridge.exposeInMainWorld("desktop", {
   openExternal: (url: string) => ipcRenderer.invoke("desktop:open-external", url),
   projects: {
     list: (): Promise<Project[]> => ipcRenderer.invoke("projects:list"),
-    create: (): Promise<Project | null> => ipcRenderer.invoke("projects:create"),
+    create: (): Promise<{ project: Project; isNew: boolean } | null> =>
+      ipcRenderer.invoke("projects:create"),
     remove: (projectId: string): Promise<void> =>
       ipcRenderer.invoke("projects:remove", projectId),
+    moveToGroup: (projectId: string, groupId: string | null): Promise<Project> =>
+      ipcRenderer.invoke("projects:move-to-group", projectId, groupId),
+  },
+  groups: {
+    create: (name: string): Promise<ProjectGroup> =>
+      ipcRenderer.invoke("groups:create", name),
+    rename: (groupId: string, name: string): Promise<ProjectGroup> =>
+      ipcRenderer.invoke("groups:rename", groupId, name),
+    remove: (groupId: string): Promise<void> =>
+      ipcRenderer.invoke("groups:remove", groupId),
   },
   threads: {
     create: (projectId: string): Promise<Thread> =>

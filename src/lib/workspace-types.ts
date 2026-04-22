@@ -2,8 +2,16 @@ export type ThreadStatus = "idle" | "running" | "closed" | "errored";
 export type ThreadTitleSource = "auto" | "manual";
 export type SplitDirection = "horizontal" | "vertical";
 
+export interface ProjectGroup {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Project {
   id: string;
+  groupId: string | null;
   name: string;
   path: string;
   createdAt: string;
@@ -37,6 +45,7 @@ export interface WorkspaceSplitNode {
 export type WorkspaceLayoutNode = WorkspaceLeafNode | WorkspaceSplitNode;
 
 export interface WorkspaceSnapshot {
+  groups: ProjectGroup[];
   projects: Project[];
   threads: Thread[];
   activeThreadId: string | null;

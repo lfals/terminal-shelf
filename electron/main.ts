@@ -13,6 +13,7 @@ import {
 } from "../src/lib/workspace-layout";
 import type {
   Project,
+  ProjectGroup,
   TerminalDataEvent,
   TerminalExitEvent,
   TerminalStatusEvent,
@@ -167,6 +168,7 @@ const normalizeProjectPath = (inputPath: string) => {
 };
 
 const createDefaultStore = (): WorkspaceStore => ({
+  groups: [],
   projects: [],
   threads: [],
   activeThreadId: null,
@@ -215,6 +217,7 @@ const normalizeLoadedStore = (rawValue: unknown): WorkspaceStore => {
 
   const source = rawValue as Partial<WorkspaceStore>;
   const projects = Array.isArray(source.projects) ? source.projects : [];
+  const groups = Array.isArray(source.groups) ? source.groups : [];
   const threads = Array.isArray(source.threads) ? source.threads : [];
   const validThreadIds = new Set(
     threads
@@ -233,9 +236,17 @@ const normalizeLoadedStore = (rawValue: unknown): WorkspaceStore => {
       ? legacyActiveThreadId
       : getFirstThreadId(layout);
 
+  const validGroups = groups.filter(
+    (group): group is ProjectGroup =>
+      Boolean(group && typeof group.id === "string" && typeof group.name === "string")
+  );
+  const validGroupIds = new Set(validGroups.map((g) => g.id));
+
   return {
+    groups: validGroups,
     projects: projects.map((project) => ({
       ...project,
+      groupId: typeof project.groupId === "string" && validGroupIds.has(project.groupId) ? project.groupId : null,
       path: normalizeProjectPath(project.path),
     })),
     threads: threads.map((thread) => ({
@@ -263,6 +274,10 @@ class WorkspaceRepository {
     this.store = this.readStore();
   }
 
+  listGroups() {
+    return [...this.store.groups];
+  }
+
   listProjects() {
     return [...this.store.projects];
   }
@@ -277,6 +292,7 @@ class WorkspaceRepository {
 
   getSnapshot(): WorkspaceSnapshot {
     return {
+      groups: this.listGroups(),
       projects: this.listProjects(),
       threads: this.listThreads(),
       activeThreadId: this.store.activeThreadId,
@@ -297,17 +313,18 @@ class WorkspaceRepository {
     return this.getSnapshot();
   }
 
-  createProject(projectPath: string) {
+  createProject(projectPath: string): { project: Project; isNew: boolean } {
     const normalizedPath = normalizeProjectPath(projectPath);
     const existingProject = this.store.projects.find((project) => project.path === normalizedPath);
 
     if (existingProject) {
-      throw new Error("PROJECT_EXISTS");
+      return { project: existingProject, isNew: false };
     }
 
     const now = new Date().toISOString();
     const project: Project = {
       id: randomUUID(),
+      groupId: null,
       name: basename(normalizedPath),
       path: normalizedPath,
       createdAt: now,
@@ -317,7 +334,7 @@ class WorkspaceRepository {
     this.store.projects.push(project);
     this.save();
 
-    return project;
+    return { project, isNew: true };
   }
 
   removeProject(projectId: string) {
@@ -335,6 +352,62 @@ class WorkspaceRepository {
 
     this.save();
     return removedThreadIds;
+  }
+
+  createGroup(name: string) {
+    const now = new Date().toISOString();
+    const group: ProjectGroup = {
+      id: randomUUID(),
+      name: name.trim().slice(0, 80) || "New group",
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.store.groups.push(group);
+    this.save();
+    return group;
+  }
+
+  renameGroup(groupId: string, name: string) {
+    const group = this.getGroup(groupId);
+    const updatedGroup: ProjectGroup = {
+      ...group,
+      name: name.trim().slice(0, 80) || group.name,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.store.groups = this.store.groups.map((item) => (item.id === groupId ? updatedGroup : item));
+    this.save();
+    return updatedGroup;
+  }
+
+  removeGroup(groupId: string) {
+    this.getGroup(groupId);
+    this.store.groups = this.store.groups.filter((item) => item.id !== groupId);
+    this.store.projects = this.store.projects.map((project) =>
+      project.groupId === groupId ? { ...project, groupId: null } : project
+    );
+    this.save();
+  }
+
+  moveProjectToGroup(projectId: string, groupId: string | null) {
+    const project = this.getProject(projectId);
+
+    if (groupId !== null) {
+      this.getGroup(groupId);
+    }
+
+    const updatedProject: Project = {
+      ...project,
+      groupId,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.store.projects = this.store.projects.map((item) =>
+      item.id === projectId ? updatedProject : item
+    );
+    this.save();
+    return updatedProject;
   }
 
   createThread(projectId: string) {
@@ -479,6 +552,16 @@ class WorkspaceRepository {
     }
 
     return project;
+  }
+
+  private getGroup(groupId: string) {
+    const group = this.store.groups.find((item) => item.id === groupId);
+
+    if (!group) {
+      throw new Error("GROUP_NOT_FOUND");
+    }
+
+    return group;
   }
 
   getThread(threadId: string) {
@@ -946,8 +1029,19 @@ app.whenReady().then(() => {
     }
   });
 
+  ipcMain.handle("groups:create", (_event, name: string) => repository.createGroup(name));
+  ipcMain.handle("groups:rename", (_event, groupId: string, name: string) =>
+    repository.renameGroup(groupId, name)
+  );
+  ipcMain.handle("groups:remove", (_event, groupId: string) => repository.removeGroup(groupId));
+  ipcMain.handle("projects:move-to-group", (_event, projectId: string, groupId: string | null) =>
+    repository.moveProjectToGroup(projectId, groupId)
+  );
+
   ipcMain.handle("threads:list", (_event, projectId: string) => repository.listThreads(projectId));
-  ipcMain.handle("threads:create", (_event, projectId: string) => repository.createThread(projectId));
+  ipcMain.handle("threads:create", (_event, projectId: string) =>
+    repository.createThread(projectId)
+  );
   ipcMain.handle("threads:rename", (_event, threadId: string, title: string) => {
     const thread = repository.renameThread(threadId, title);
     ptyManager.broadcastThreadUpdated(thread);

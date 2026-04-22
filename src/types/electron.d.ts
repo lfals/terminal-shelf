@@ -1,5 +1,6 @@
 import type {
   Project,
+  ProjectGroup,
   TerminalDataEvent,
   TerminalExitEvent,
   TerminalStatusEvent,
@@ -23,8 +24,14 @@ declare global {
       openExternal: (url: string) => Promise<void>;
       projects: {
         list: () => Promise<Project[]>;
-        create: () => Promise<Project | null>;
+        create: () => Promise<{ project: Project; isNew: boolean } | null>;
         remove: (projectId: string) => Promise<void>;
+        moveToGroup: (projectId: string, groupId: string | null) => Promise<Project>;
+      };
+      groups: {
+        create: (name: string) => Promise<ProjectGroup>;
+        rename: (groupId: string, name: string) => Promise<ProjectGroup>;
+        remove: (groupId: string) => Promise<void>;
       };
       threads: {
         create: (projectId: string) => Promise<Thread>;
