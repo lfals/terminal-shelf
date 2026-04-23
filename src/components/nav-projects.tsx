@@ -262,7 +262,9 @@ export function NavProjects({
                       <SidebarMenuSubButton
                         isActive={isActiveThread}
                         onClick={() => onSelectThread(thread.id)}
-                        className="group/thread-button justify-between rounded-md border border-transparent pr-10 text-slate-300 hover:bg-slate-900/55 hover:text-slate-100 data-[active=true]:border-transparent data-[active=true]:bg-slate-800/95 data-[active=true]:text-white"
+                        className={`group/thread-button justify-between rounded-md border pr-10 text-slate-300 hover:bg-slate-900/55 hover:text-slate-100 data-[active=true]:bg-slate-800/95 data-[active=true]:text-white ${
+                          isRunning ? "border-emerald-400/35" : "border-transparent"
+                        }`}
                       >
                         <span className="flex min-w-0 items-center gap-2">
                           {splitThreadIds.has(thread.id) ? (
@@ -276,9 +278,6 @@ export function NavProjects({
                             </span>
                           ) : null}
                           <span className="truncate">{thread.title}</span>
-                        </span>
-                        <span className="text-[10px] uppercase tracking-[0.18em] text-slate-500 group-data-[active=true]/thread-button:text-cyan-100/75">
-                          {thread.status}
                         </span>
                       </SidebarMenuSubButton>
                       <DropdownMenu>
