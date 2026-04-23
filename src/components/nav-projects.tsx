@@ -38,6 +38,7 @@ import type { Project, ProjectGroup, SplitDirection, Thread } from "@/lib/worksp
 import {
   ChevronRight,
   Folder,
+  FolderOpen,
   FolderPlus,
   MoreHorizontal,
   Pencil,
@@ -417,9 +418,9 @@ export function NavProjects({
                       tooltip={group.name}
                       className="rounded-md text-slate-400 hover:bg-transparent hover:text-slate-200 group-hover/menu-item:text-slate-200"
                     >
-                      <Folder className="size-4 shrink-0 text-slate-500" />
+                      <Folder className="size-4 shrink-0 text-white group-data-[state=open]/group-collapsible:hidden group-data-[state=closed]/group-collapsible:block" />
+                      <FolderOpen className="hidden size-4 shrink-0 text-white group-data-[state=open]/group-collapsible:block group-data-[state=closed]/group-collapsible:hidden" />
                       <span className="truncate">{group.name}</span>
-                      <ChevronRight className="ml-auto size-4 transition-transform duration-200 group-data-[state=open]/group-collapsible:rotate-90" />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
                   <div className="flex items-center">
@@ -549,6 +550,8 @@ export function NavProjects({
             </Button>
             <Button
               type="button"
+              variant="destructive"
+              className="w-full sm:col-span-2"
               disabled={busy || !pendingGroupRemoval}
               onClick={() => {
                 if (!pendingGroupRemoval) {
