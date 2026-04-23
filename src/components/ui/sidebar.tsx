@@ -30,11 +30,15 @@ const SIDEBAR_WIDTH = "16rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
+const SIDEBAR_MIN_WIDTH_PX = 220
+const SIDEBAR_MAX_WIDTH_PX = 520
 
 type SidebarContextProps = {
   state: "expanded" | "collapsed"
   open: boolean
   setOpen: (open: boolean) => void
+  sidebarWidth: number
+  setSidebarWidth: (width: number) => void
   openMobile: boolean
   setOpenMobile: (open: boolean) => void
   isMobile: boolean
@@ -67,6 +71,10 @@ function SidebarProvider({
 }) {
   const isMobile = useIsMobile()
   const [openMobile, setOpenMobile] = React.useState(false)
+  const [sidebarWidth, setSidebarWidth] = React.useState(() => {
+    const parsedWidth = Number.parseFloat(SIDEBAR_WIDTH)
+    return Number.isFinite(parsedWidth) ? parsedWidth * 16 : 256
+  })
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
@@ -117,12 +125,14 @@ function SidebarProvider({
       state,
       open,
       setOpen,
+      sidebarWidth,
+      setSidebarWidth,
       isMobile,
       openMobile,
       setOpenMobile,
       toggleSidebar,
     }),
-    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar]
+    [state, open, setOpen, sidebarWidth, isMobile, openMobile, setOpenMobile, toggleSidebar]
   )
 
   return (
@@ -131,7 +141,7 @@ function SidebarProvider({
         data-slot="sidebar-wrapper"
         style={
           {
-            "--sidebar-width": SIDEBAR_WIDTH,
+            "--sidebar-width": `${sidebarWidth}px`,
             "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
             ...style,
           } as React.CSSProperties
@@ -277,7 +287,51 @@ function SidebarTrigger({
 }
 
 function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
-  const { toggleSidebar } = useSidebar()
+  const { isMobile, state, setSidebarWidth, toggleSidebar } = useSidebar()
+
+  const handlePointerDown = React.useCallback(
+    (event: React.PointerEvent<HTMLButtonElement>) => {
+      if (isMobile || state !== "expanded") {
+        return
+      }
+
+      const railElement = event.currentTarget
+      const sidebarElement = railElement.closest("[data-slot='sidebar']") as HTMLElement | null
+      const sidebarSide = sidebarElement?.dataset.side === "right" ? "right" : "left"
+      const startX = event.clientX
+      const startWidth = sidebarElement?.getBoundingClientRect().width ?? 0
+      let didDrag = false
+
+      railElement.setPointerCapture?.(event.pointerId)
+
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        const deltaX = moveEvent.clientX - startX
+        const nextWidth = sidebarSide === "right" ? startWidth - deltaX : startWidth + deltaX
+        const clampedWidth = Math.min(SIDEBAR_MAX_WIDTH_PX, Math.max(SIDEBAR_MIN_WIDTH_PX, nextWidth))
+
+        if (!didDrag && Math.abs(deltaX) > 3) {
+          didDrag = true
+        }
+
+        setSidebarWidth(clampedWidth)
+      }
+
+      const handlePointerUp = () => {
+        document.removeEventListener("pointermove", handlePointerMove)
+        document.removeEventListener("pointerup", handlePointerUp)
+        document.removeEventListener("pointercancel", handlePointerUp)
+
+        if (!didDrag) {
+          toggleSidebar()
+        }
+      }
+
+      document.addEventListener("pointermove", handlePointerMove)
+      document.addEventListener("pointerup", handlePointerUp)
+      document.addEventListener("pointercancel", handlePointerUp)
+    },
+    [isMobile, setSidebarWidth, state, toggleSidebar]
+  )
 
   return (
     <button
@@ -285,7 +339,7 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
       data-slot="sidebar-rail"
       aria-label="Toggle Sidebar"
       tabIndex={-1}
-      onClick={toggleSidebar}
+      onPointerDown={handlePointerDown}
       title="Toggle Sidebar"
       className={cn(
         "absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
@@ -294,6 +348,7 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
         "group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full hover:group-data-[collapsible=offcanvas]:bg-sidebar",
         "[[data-side=left][data-collapsible=offcanvas]_&]:-right-2",
         "[[data-side=right][data-collapsible=offcanvas]_&]:-left-2",
+        "touch-none",
         className
       )}
       {...props}
