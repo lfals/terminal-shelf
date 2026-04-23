@@ -1,6 +1,6 @@
 "use client"
 
-import { type FormEvent, useState } from "react"
+import { type DragEvent, type FormEvent, useState } from "react"
 
 import {
   AlertDialog,
@@ -101,6 +101,9 @@ export function NavProjects({
   const { isMobile } = useSidebar()
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null)
   const [renameValue, setRenameValue] = useState("")
+  const [draggedProjectId, setDraggedProjectId] = useState<string | null>(null)
+  const [activeDropGroupId, setActiveDropGroupId] = useState<string | null>(null)
+  const [isRootDropActive, setIsRootDropActive] = useState(false)
   const [showNewGroupDialog, setShowNewGroupDialog] = useState(false)
   const [newGroupName, setNewGroupName] = useState("")
   const [pendingGroupRemoval, setPendingGroupRemoval] = useState<{
@@ -159,6 +162,32 @@ export function NavProjects({
     closeNewGroupDialog()
   }
 
+  const getDraggedProjectId = (event: DragEvent<HTMLElement>) =>
+    draggedProjectId ?? event.dataTransfer.getData("text/project-id")
+
+  const completeProjectDrop = (event: DragEvent<HTMLElement>, targetGroupId: string | null) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setActiveDropGroupId(null)
+    setIsRootDropActive(false)
+
+    if (busy) {
+      return
+    }
+
+    const projectId = getDraggedProjectId(event)
+    if (!projectId) {
+      return
+    }
+
+    const draggedProject = projects.find((project) => project.id === projectId)
+    if (!draggedProject || draggedProject.groupId === targetGroupId) {
+      return
+    }
+
+    onMoveProjectToGroup(projectId, targetGroupId)
+  }
+
   const renderProject = (project: Project) => {
     const projectThreads = threads.filter((thread) => thread.projectId === project.id)
     const isProjectActive = projectThreads.some((thread) => thread.id === activeThreadId)
@@ -172,7 +201,27 @@ export function NavProjects({
         defaultOpen={isProjectActive}
         className="group/collapsible"
       >
-        <SidebarMenuItem className="rounded-md transition-colors hover:bg-slate-900/55">
+        <SidebarMenuItem
+          className={`rounded-md transition-colors hover:bg-slate-900/55 ${
+            draggedProjectId === project.id ? "opacity-60" : ""
+          }`}
+          draggable={!busy}
+          onDragStart={(event) => {
+            if (busy) {
+              event.preventDefault()
+              return
+            }
+
+            event.dataTransfer.effectAllowed = "move"
+            event.dataTransfer.setData("text/project-id", project.id)
+            setDraggedProjectId(project.id)
+          }}
+          onDragEnd={() => {
+            setDraggedProjectId(null)
+            setActiveDropGroupId(null)
+            setIsRootDropActive(false)
+          }}
+        >
           <CollapsibleTrigger asChild>
             <SidebarMenuButton
               tooltip={project.name}
@@ -415,7 +464,28 @@ export function NavProjects({
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
                       tooltip={group.name}
-                      className="rounded-md text-slate-400 hover:bg-transparent hover:text-slate-200 group-hover/menu-item:text-slate-200"
+                      className={`rounded-md text-slate-400 hover:bg-transparent hover:text-slate-200 group-hover/menu-item:text-slate-200 ${
+                        activeDropGroupId === group.id ? "bg-cyan-500/15 ring-1 ring-cyan-400/40" : ""
+                      }`}
+                      onDragOver={(event) => {
+                        if (busy) {
+                          return
+                        }
+
+                        event.preventDefault()
+                        event.stopPropagation()
+                        event.dataTransfer.dropEffect = "move"
+                        setActiveDropGroupId(group.id)
+                        setIsRootDropActive(false)
+                      }}
+                      onDragLeave={(event) => {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        setActiveDropGroupId((currentGroupId) =>
+                          currentGroupId === group.id ? null : currentGroupId
+                        )
+                      }}
+                      onDrop={(event) => completeProjectDrop(event, group.id)}
                     >
                       <Folder className="size-4 shrink-0 text-white group-data-[state=open]/group-collapsible:hidden group-data-[state=closed]/group-collapsible:block" />
                       <FolderOpen className="hidden size-4 shrink-0 text-white group-data-[state=open]/group-collapsible:block group-data-[state=closed]/group-collapsible:hidden" />
@@ -475,7 +545,28 @@ export function NavProjects({
                     </DropdownMenu>
                   </div>
                   <CollapsibleContent>
-                    <SidebarMenuSub>
+                    <SidebarMenuSub
+                      className={activeDropGroupId === group.id ? "rounded-md bg-cyan-500/10" : undefined}
+                      onDragOver={(event) => {
+                        if (busy) {
+                          return
+                        }
+
+                        event.preventDefault()
+                        event.stopPropagation()
+                        event.dataTransfer.dropEffect = "move"
+                        setActiveDropGroupId(group.id)
+                        setIsRootDropActive(false)
+                      }}
+                      onDragLeave={(event) => {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        setActiveDropGroupId((currentGroupId) =>
+                          currentGroupId === group.id ? null : currentGroupId
+                        )
+                      }}
+                      onDrop={(event) => completeProjectDrop(event, group.id)}
+                    >
                       {groupProjects.length === 0 ? (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton
@@ -498,7 +589,32 @@ export function NavProjects({
           })}
 
           {/* Projetos sem grupo */}
-          {ungroupedProjects.map((project) => renderProject(project))}
+          <div
+            className={`rounded-md transition-colors ${
+              isRootDropActive ? "bg-cyan-500/10 ring-1 ring-cyan-400/30" : ""
+            }`}
+            onDragOver={(event) => {
+              if (busy) {
+                return
+              }
+
+              event.preventDefault()
+              event.dataTransfer.dropEffect = "move"
+              setIsRootDropActive(true)
+              setActiveDropGroupId(null)
+            }}
+            onDragLeave={(event) => {
+              event.preventDefault()
+              const nextTarget = event.relatedTarget
+              if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+                return
+              }
+              setIsRootDropActive(false)
+            }}
+            onDrop={(event) => completeProjectDrop(event, null)}
+          >
+            {ungroupedProjects.map((project) => renderProject(project))}
+          </div>
         </SidebarMenu>
       </SidebarGroup>
 

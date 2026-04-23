@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal, type IDisposable } from "@xterm/xterm";
 
 import type { ThreadStatus } from "@/lib/workspace-types";
@@ -69,12 +70,16 @@ export function TerminalPane({ threadId, initialData, status, isActive, onFocus 
       theme: terminalTheme,
     });
     const fitAddon = new FitAddon();
+    const webLinksAddon = new WebLinksAddon((_event, url) => {
+      void desktop.openExternal(url);
+    });
     const altInputState = {
       handled: false,
       pending: false,
     };
 
     terminal.loadAddon(fitAddon);
+    terminal.loadAddon(webLinksAddon);
     terminal.open(container);
     terminalRef.current = terminal;
 
