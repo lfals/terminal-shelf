@@ -1,11 +1,11 @@
 "use client";
 
 import { startTransition, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
-import { AlertCircle, FolderPlus, LoaderCircle, MonitorCog, Plus, X } from "lucide-react";
+import { FolderPlus, LoaderCircle, MonitorCog, Plus, X } from "lucide-react";
+import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { TerminalPane } from "@/components/terminal/terminal-pane";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -102,6 +102,17 @@ export function WorkspaceShell() {
   );
   const splitThreadIds = useMemo(() => collectSplitThreadIds(layout), [layout]);
   const hasSplitLayout = splitThreadIds.size > 0;
+
+  useEffect(() => {
+    if (!errorMessage) {
+      return;
+    }
+
+    toast.error("Workspace error", {
+      description: errorMessage,
+    });
+    setErrorMessage(null);
+  }, [errorMessage]);
 
   const applySnapshot = (snapshot: WorkspaceSnapshot) => {
     startTransition(() => {
@@ -299,6 +310,15 @@ export function WorkspaceShell() {
         });
       } else if (groupId && project.groupId !== groupId) {
         setPendingMoveProject({ project, targetGroupId: groupId });
+      } else {
+        const existingGroupName = project.groupId
+          ? groups.find((group) => group.id === project.groupId)?.name ?? null
+          : null;
+        setErrorMessage(
+          existingGroupName
+            ? `O projeto "${project.name}" já existe no grupo "${existingGroupName}".`
+            : `O projeto "${project.name}" já existe na lista.`
+        );
       }
     } catch (error) {
       setErrorMessage(
@@ -953,14 +973,6 @@ export function WorkspaceShell() {
               : "flex min-h-0 flex-1 flex-col gap-4 overflow-hidden bg-transparent p-4 pt-4 text-slate-100"
           }
         >
-          {errorMessage ? (
-            <Alert variant="destructive" className="border-rose-500/25 bg-rose-950/45 text-rose-100">
-              <AlertCircle className="size-4" />
-              <AlertTitle>Workspace error</AlertTitle>
-              <AlertDescription className="text-rose-100/85">{errorMessage}</AlertDescription>
-            </Alert>
-          ) : null}
-
           {isLoading ? (
             <Card className="workspace-panel flex min-h-[320px] flex-1 items-center justify-center text-slate-100">
               <CardContent className="flex items-center gap-3 p-8">

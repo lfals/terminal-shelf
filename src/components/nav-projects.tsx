@@ -386,11 +386,14 @@ export function NavProjects({
                           ) : null}
                           <DropdownMenuItem
                             onClick={() =>
-                              setRenameTarget({
-                                kind: "thread",
-                                id: thread.id,
-                                lastAutoTitle: thread.lastAutoTitle,
-                              })
+                              {
+                                setRenameTarget({
+                                  kind: "thread",
+                                  id: thread.id,
+                                  lastAutoTitle: thread.lastAutoTitle,
+                                })
+                                setRenameValue(thread.title)
+                              }
                             }
                             disabled={busy}
                           >
@@ -516,11 +519,14 @@ export function NavProjects({
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() =>
-                            setRenameTarget({
-                              kind: "group",
-                              id: group.id,
-                              currentName: group.name,
-                            })
+                            {
+                              setRenameTarget({
+                                kind: "group",
+                                id: group.id,
+                                currentName: group.name,
+                              })
+                              setRenameValue(group.name)
+                            }
                           }
                           disabled={busy}
                         >
