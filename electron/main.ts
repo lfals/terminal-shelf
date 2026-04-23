@@ -31,7 +31,7 @@ const STORE_FILE_NAME = "workspace.json";
 const DEFAULT_TERMINAL_SIZE = { cols: 80, rows: 24 };
 const MAX_THREAD_TITLE_LENGTH = 80;
 const isDevelopmentMode = Boolean(rendererUrl);
-const appDisplayName = isDevelopmentMode ? "Term Shelf - Dev" : "Term";
+const appDisplayName = isDevelopmentMode ? "Terminal Shelf - Dev" : "Terminal Shelf";
 
 interface ThreadInputState {
   buffer: string;

@@ -1,5 +1,5 @@
-appId: com.felps.term
-productName: Term
+appId: com.lfals.term
+productName: Terminal Shelf
 directories:
   output: release
 files:
@@ -14,3 +14,11 @@ asarUnpack:
 npmRebuild: false
 mac:
   category: public.app-category.developer-tools
+win:
+  target:
+    - nsis
+  icon: assets/icon.ico
+nsis:
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
+  installerHeaderIcon: assets/icon.ico

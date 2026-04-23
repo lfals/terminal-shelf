@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: process.env.NODE_ENV === "development" ? "Term Shelf - Dev" : "Term",
+  title: process.env.NODE_ENV === "development" ? "Terminal Shelf - Dev" : "Terminal Shelf",
   description: "Starter desktop app com Electron, Next.js, Tailwind CSS e shadcn/ui.",
 };
 
