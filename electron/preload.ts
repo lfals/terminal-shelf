@@ -44,8 +44,8 @@ contextBridge.exposeInMainWorld("desktop", {
       ipcRenderer.invoke("groups:create", name),
     rename: (groupId: string, name: string): Promise<ProjectGroup> =>
       ipcRenderer.invoke("groups:rename", groupId, name),
-    remove: (groupId: string): Promise<void> =>
-      ipcRenderer.invoke("groups:remove", groupId),
+    remove: (groupId: string, removeProjects: boolean): Promise<void> =>
+      ipcRenderer.invoke("groups:remove", groupId, removeProjects),
   },
   threads: {
     create: (projectId: string): Promise<Thread> =>

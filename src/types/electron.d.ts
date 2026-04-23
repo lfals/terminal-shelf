@@ -31,7 +31,7 @@ declare global {
       groups: {
         create: (name: string) => Promise<ProjectGroup>;
         rename: (groupId: string, name: string) => Promise<ProjectGroup>;
-        remove: (groupId: string) => Promise<void>;
+        remove: (groupId: string, removeProjects: boolean) => Promise<void>;
       };
       threads: {
         create: (projectId: string) => Promise<Thread>;

@@ -381,13 +381,37 @@ class WorkspaceRepository {
     return updatedGroup;
   }
 
-  removeGroup(groupId: string) {
+  removeGroup(groupId: string, removeProjects: boolean) {
     this.getGroup(groupId);
+
+    if (removeProjects) {
+      const removedProjectIds = new Set(
+        this.store.projects
+          .filter((project) => project.groupId === groupId)
+          .map((project) => project.id)
+      );
+      const removedThreadIds = this.store.threads
+        .filter((thread) => removedProjectIds.has(thread.projectId))
+        .map((thread) => thread.id);
+
+      this.store.groups = this.store.groups.filter((item) => item.id !== groupId);
+      this.store.projects = this.store.projects.filter((project) => !removedProjectIds.has(project.id));
+      this.store.threads = this.store.threads.filter((thread) => !removedProjectIds.has(thread.projectId));
+      this.store.layout = removedThreadIds.reduce(
+        (currentLayout, threadId) => removeThreadFromLayout(currentLayout, threadId),
+        this.store.layout
+      );
+      this.store.activeThreadId = this.resolveActiveThreadId(this.store.activeThreadId);
+      this.save();
+      return removedThreadIds;
+    }
+
     this.store.groups = this.store.groups.filter((item) => item.id !== groupId);
     this.store.projects = this.store.projects.map((project) =>
       project.groupId === groupId ? { ...project, groupId: null } : project
     );
     this.save();
+    return [];
   }
 
   moveProjectToGroup(projectId: string, groupId: string | null) {
@@ -1033,7 +1057,12 @@ app.whenReady().then(() => {
   ipcMain.handle("groups:rename", (_event, groupId: string, name: string) =>
     repository.renameGroup(groupId, name)
   );
-  ipcMain.handle("groups:remove", (_event, groupId: string) => repository.removeGroup(groupId));
+  ipcMain.handle("groups:remove", (_event, groupId: string, removeProjects: boolean) => {
+    const removedThreadIds = repository.removeGroup(groupId, removeProjects);
+    for (const threadId of removedThreadIds) {
+      ptyManager.removeThread(threadId);
+    }
+  });
   ipcMain.handle("projects:move-to-group", (_event, projectId: string, groupId: string | null) =>
     repository.moveProjectToGroup(projectId, groupId)
   );

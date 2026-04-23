@@ -56,7 +56,7 @@ interface NavProjectsProps {
   onAddProject: (groupId?: string | null) => void
   onCreateGroup: (name: string) => void
   onRenameGroup: (groupId: string, name: string) => void
-  onRemoveGroup: (groupId: string) => void
+  onRemoveGroup: (groupId: string, removeProjects: boolean) => void
   onMoveProjectToGroup: (projectId: string, groupId: string | null) => void
   onCreateThread: (projectId: string) => void
   onClosePane: () => void
@@ -102,6 +102,11 @@ export function NavProjects({
   const [renameValue, setRenameValue] = useState("")
   const [showNewGroupDialog, setShowNewGroupDialog] = useState(false)
   const [newGroupName, setNewGroupName] = useState("")
+  const [pendingGroupRemoval, setPendingGroupRemoval] = useState<{
+    id: string
+    name: string
+    projectCount: number
+  } | null>(null)
 
   const closeRenameDialog = () => {
     setRenameTarget(null)
@@ -136,6 +141,10 @@ export function NavProjects({
   const closeNewGroupDialog = () => {
     setShowNewGroupDialog(false)
     setNewGroupName("")
+  }
+
+  const closeRemoveGroupDialog = () => {
+    setPendingGroupRemoval(null)
   }
 
   const handleNewGroupSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -449,7 +458,16 @@ export function NavProjects({
                           <span>Rename group</span>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => onRemoveGroup(group.id)} disabled={busy}>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            setPendingGroupRemoval({
+                              id: group.id,
+                              name: group.name,
+                              projectCount: groupProjects.length,
+                            })
+                          }
+                          disabled={busy}
+                        >
                           <Trash2 className="text-muted-foreground" />
                           <span>Remove group</span>
                         </DropdownMenuItem>
@@ -483,6 +501,69 @@ export function NavProjects({
           {ungroupedProjects.map((project) => renderProject(project))}
         </SidebarMenu>
       </SidebarGroup>
+
+      {/* Dialog: renomear thread ou grupo */}
+      <AlertDialog
+        open={pendingGroupRemoval !== null}
+        onOpenChange={(open) => !open && closeRemoveGroupDialog()}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove group</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingGroupRemoval?.projectCount
+                ? (
+                    <>
+                      The group <strong>{pendingGroupRemoval.name}</strong> has{" "}
+                      <strong>{pendingGroupRemoval.projectCount}</strong>{" "}
+                      {pendingGroupRemoval.projectCount === 1 ? "project" : "projects"}.
+                      Choose whether to keep these projects in the root or remove them together with
+                      the group.
+                    </>
+                  )
+                : (
+                    <>
+                      Remove the group <strong>{pendingGroupRemoval?.name}</strong>?
+                    </>
+                  )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="grid grid-cols-1 gap-2">
+            <Button type="button" variant="outline" onClick={closeRemoveGroupDialog} disabled={busy}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={busy || !pendingGroupRemoval}
+              onClick={() => {
+                if (!pendingGroupRemoval) {
+                  return
+                }
+
+                onRemoveGroup(pendingGroupRemoval.id, false)
+                closeRemoveGroupDialog()
+              }}
+            >
+              keep projects
+            </Button>
+            <Button
+              type="button"
+              disabled={busy || !pendingGroupRemoval}
+              onClick={() => {
+                if (!pendingGroupRemoval) {
+                  return
+                }
+
+                onRemoveGroup(pendingGroupRemoval.id, true)
+                closeRemoveGroupDialog()
+              }}
+            >
+              Remove projects
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialog: renomear thread ou grupo */}
       <AlertDialog

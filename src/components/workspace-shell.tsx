@@ -399,7 +399,7 @@ export function WorkspaceShell() {
     }
   };
 
-  const handleRemoveGroup = async (groupId: string) => {
+  const handleRemoveGroup = async (groupId: string, removeProjects: boolean) => {
     const desktop = window.desktop;
 
     if (!desktop) {
@@ -410,9 +410,50 @@ export function WorkspaceShell() {
     setErrorMessage(null);
 
     try {
-      await desktop.groups.remove(groupId);
+      let removedThreadIds = new Set<string>();
+      let nextLayout = layout;
+      let nextThreads = threads;
+      let nextActiveThreadId = activeThreadId;
+
+      if (removeProjects) {
+        const removedProjectIds = new Set(
+          projects.filter((project) => project.groupId === groupId).map((project) => project.id)
+        );
+        removedThreadIds = new Set(
+          threads
+            .filter((thread) => removedProjectIds.has(thread.projectId))
+            .map((thread) => thread.id)
+        );
+
+        nextLayout = [...removedThreadIds].reduce(
+          (currentLayout, threadId) => removeThreadFromLayout(currentLayout, threadId),
+          layout
+        );
+        nextThreads = threads.filter((thread) => !removedThreadIds.has(thread.id));
+        nextActiveThreadId = resolveNextActiveThreadId(
+          nextLayout,
+          activeThreadId && removedThreadIds.has(activeThreadId) ? null : activeThreadId
+        );
+      }
+
+      await desktop.groups.remove(groupId, removeProjects);
+
+      for (const threadId of removedThreadIds) {
+        delete terminalBuffersRef.current[threadId];
+      }
+
       startTransition(() => {
         setGroups((currentGroups) => currentGroups.filter((item) => item.id !== groupId));
+        if (removeProjects) {
+          setProjects((currentProjects) =>
+            currentProjects.filter((project) => project.groupId !== groupId)
+          );
+          setThreads(nextThreads);
+          setLayout(nextLayout);
+          setActiveThreadId(nextActiveThreadId);
+          return;
+        }
+
         setProjects((currentProjects) =>
           currentProjects.map((project) =>
             project.groupId === groupId ? { ...project, groupId: null } : project

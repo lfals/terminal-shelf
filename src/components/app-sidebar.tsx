@@ -27,7 +27,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onAddProject: (groupId?: string | null) => void
   onCreateGroup: (name: string) => void
   onRenameGroup: (groupId: string, name: string) => void
-  onRemoveGroup: (groupId: string) => void
+  onRemoveGroup: (groupId: string, removeProjects: boolean) => void
   onMoveProjectToGroup: (projectId: string, groupId: string | null) => void
   onCreateThread: (projectId: string) => void
   onClosePane: () => void
