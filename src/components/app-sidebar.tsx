@@ -48,6 +48,7 @@ export function AppSidebar({
   threads,
   activeThreadId,
   activeView,
+  hasMacWindowControlsInset: _hasMacWindowControlsInset,
   busy = false,
   splitThreadIds,
   onAddProject,
@@ -68,6 +69,8 @@ export function AppSidebar({
   onSplitThreadWithActive,
   ...props
 }: AppSidebarProps) {
+  void _hasMacWindowControlsInset
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarContent>
