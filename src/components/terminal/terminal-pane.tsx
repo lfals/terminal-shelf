@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal, type IDisposable } from "@xterm/xterm";
+import "@xterm/xterm/css/xterm.css";
 
 import type { ThreadStatus } from "@/lib/workspace-types";
 
@@ -45,6 +46,8 @@ export function TerminalPane({ threadId, initialData, status, isActive, onFocus 
   const terminalRef = useRef<Terminal | null>(null);
   const inputDisposableRef = useRef<IDisposable | null>(null);
   const initialDataRef = useRef(initialData);
+  const pendingOutputRef = useRef("");
+  const flushFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     initialDataRef.current = initialData;
@@ -82,6 +85,21 @@ export function TerminalPane({ threadId, initialData, status, isActive, onFocus 
     terminal.loadAddon(webLinksAddon);
     terminal.open(container);
     terminalRef.current = terminal;
+    const flushPendingOutput = () => {
+      flushFrameRef.current = null;
+      if (!pendingOutputRef.current) {
+        return;
+      }
+      terminal.write(pendingOutputRef.current);
+      pendingOutputRef.current = "";
+      terminal.scrollToBottom();
+    };
+    const scheduleFlush = () => {
+      if (flushFrameRef.current !== null) {
+        return;
+      }
+      flushFrameRef.current = window.requestAnimationFrame(flushPendingOutput);
+    };
 
     const textarea = terminal.textarea;
     const updateAltPending = (event: KeyboardEvent) => {
@@ -177,11 +195,9 @@ export function TerminalPane({ threadId, initialData, status, isActive, onFocus 
     const resizeObserver = new ResizeObserver(() => syncSize());
     resizeObserver.observe(container);
 
-    const disposeIncoming = desktop.terminal.onData(({ threadId: incomingThreadId, data }) => {
-      if (incomingThreadId === threadId) {
-        terminal.write(data);
-        terminal.scrollToBottom();
-      }
+    const disposeIncoming = desktop.terminal.onThreadData(threadId, ({ data }) => {
+      pendingOutputRef.current += data;
+      scheduleFlush();
     });
     return () => {
       inputDisposableRef.current?.dispose();
@@ -189,6 +205,11 @@ export function TerminalPane({ threadId, initialData, status, isActive, onFocus 
       window.cancelAnimationFrame(frame);
       resizeObserver.disconnect();
       disposeIncoming();
+      if (flushFrameRef.current !== null) {
+        window.cancelAnimationFrame(flushFrameRef.current);
+      }
+      flushFrameRef.current = null;
+      pendingOutputRef.current = "";
       textarea?.removeEventListener("keydown", updateAltPending);
       textarea?.removeEventListener("keyup", resetAltPending);
       textarea?.removeEventListener("blur", resetAltPending);
@@ -212,7 +233,12 @@ export function TerminalPane({ threadId, initialData, status, isActive, onFocus 
 
     inputDisposableRef.current = terminal.onData((data) => {
       void desktop.terminal.write(threadId, data);
-      terminal.scrollToBottom();
+      if (flushFrameRef.current === null) {
+        flushFrameRef.current = window.requestAnimationFrame(() => {
+          flushFrameRef.current = null;
+          terminal.scrollToBottom();
+        });
+      }
     });
 
     terminal.focus();

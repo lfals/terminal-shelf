@@ -70,10 +70,16 @@ contextBridge.exposeInMainWorld("desktop", {
       ipcRenderer.invoke("terminal:resize", threadId, cols, rows),
     onData: (listener: (payload: TerminalDataEvent) => void) =>
       onChannel("terminal:data", listener),
+    onThreadData: (threadId: string, listener: (payload: TerminalDataEvent) => void) =>
+      onChannel(`terminal:data:${threadId}`, listener),
     onExit: (listener: (payload: TerminalExitEvent) => void) =>
       onChannel("terminal:exit", listener),
+    onThreadExit: (threadId: string, listener: (payload: TerminalExitEvent) => void) =>
+      onChannel(`terminal:exit:${threadId}`, listener),
     onStatus: (listener: (payload: TerminalStatusEvent) => void) =>
       onChannel("terminal:status", listener),
+    onThreadStatus: (threadId: string, listener: (payload: TerminalStatusEvent) => void) =>
+      onChannel(`terminal:status:${threadId}`, listener),
   },
   workspace: {
     getSnapshot: (): Promise<WorkspaceSnapshot> =>

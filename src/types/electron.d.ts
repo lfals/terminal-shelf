@@ -46,8 +46,11 @@ declare global {
         write: (threadId: string, data: string) => Promise<void>;
         resize: (threadId: string, cols: number, rows: number) => Promise<void>;
         onData: (listener: (payload: TerminalDataEvent) => void) => () => void;
+        onThreadData: (threadId: string, listener: (payload: TerminalDataEvent) => void) => () => void;
         onExit: (listener: (payload: TerminalExitEvent) => void) => () => void;
+        onThreadExit: (threadId: string, listener: (payload: TerminalExitEvent) => void) => () => void;
         onStatus: (listener: (payload: TerminalStatusEvent) => void) => () => void;
+        onThreadStatus: (threadId: string, listener: (payload: TerminalStatusEvent) => void) => () => void;
       };
       workspace: {
         getSnapshot: () => Promise<WorkspaceSnapshot>;

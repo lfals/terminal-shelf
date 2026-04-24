@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
 
 const geistSans = Geist({
   variable: "--font-sans",
@@ -26,7 +25,6 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <TooltipProvider>
     <html lang="pt-BR" className={cn("dark font-sans", geistSans.variable)} suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} h-dvh overflow-hidden antialiased`}
@@ -35,6 +33,5 @@ export default function RootLayout({
         {children}
       </body>
     </html>
-        </TooltipProvider>
   );
 }

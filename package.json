@@ -14,6 +14,7 @@
     "start": "electron .electron/main.js",
     "dist": "bun run build && electron-builder --config electron-builder.yml",
     "lint": "eslint .",
+    "perf:benchmark": "bun run ./scripts/perf-benchmark.ts",
     "release:tag": "bun run ./scripts/release-tag.ts"
   },
   "dependencies": {

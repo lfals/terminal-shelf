@@ -1,11 +1,11 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { startTransition, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { FolderPlus, LoaderCircle, MonitorCog, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/app-sidebar";
-import { TerminalPane } from "@/components/terminal/terminal-pane";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   collectSplitThreadIds,
   createLeafNode,
@@ -39,8 +40,15 @@ import type {
   WorkspaceSnapshot,
 } from "@/lib/workspace-types";
 
-const MAX_BUFFER_SIZE = 200_000;
+const MAX_BUFFER_SIZE = 120_000;
+const MAX_BUFFERED_THREADS = 40;
 type MainView = "terminal" | "settings";
+const TerminalPane = dynamic(
+  () => import("@/components/terminal/terminal-pane").then((module) => module.TerminalPane),
+  {
+    ssr: false,
+  }
+);
 
 const trimBuffer = (value: string) => {
   if (value.length <= MAX_BUFFER_SIZE) {
@@ -55,6 +63,14 @@ const trimBuffer = (value: string) => {
       : value.slice(sliceStart);
 
   return candidate.replace(/^(?:\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)?|\u001b(?:\[[0-?]*[ -/]*[@-~]?|[@-_]?))/, "");
+};
+
+const touchBufferThread = (threadIds: string[], threadId: string) => {
+  const currentIndex = threadIds.indexOf(threadId);
+  if (currentIndex >= 0) {
+    threadIds.splice(currentIndex, 1);
+  }
+  threadIds.push(threadId);
 };
 
 const updateThread = (threads: Thread[], nextThread: Thread) =>
@@ -87,11 +103,15 @@ export function WorkspaceShell() {
     targetGroupId: string;
   } | null>(null);
   const terminalBuffersRef = useRef<Record<string, string>>({});
+  const bufferTouchOrderRef = useRef<string[]>([]);
+  const activeThreadIdRef = useRef<string | null>(null);
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.id === activeThreadId) ?? null,
     [activeThreadId, threads]
   );
+  const threadById = useMemo(() => new Map(threads.map((thread) => [thread.id, thread])), [threads]);
+  const groupById = useMemo(() => new Map(groups.map((group) => [group.id, group])), [groups]);
   const runtime = runtimeInfo.runtime;
   const activeProject = useMemo(
     () =>
@@ -102,6 +122,10 @@ export function WorkspaceShell() {
   );
   const splitThreadIds = useMemo(() => collectSplitThreadIds(layout), [layout]);
   const hasSplitLayout = splitThreadIds.size > 0;
+
+  useEffect(() => {
+    activeThreadIdRef.current = activeThreadId;
+  }, [activeThreadId]);
 
   useEffect(() => {
     if (!errorMessage) {
@@ -198,6 +222,14 @@ export function WorkspaceShell() {
     const disposeData = desktop.terminal.onData(({ threadId, data }) => {
       const currentValue = terminalBuffersRef.current[threadId] ?? "";
       terminalBuffersRef.current[threadId] = trimBuffer(`${currentValue}${data}`);
+      touchBufferThread(bufferTouchOrderRef.current, threadId);
+      while (bufferTouchOrderRef.current.length > MAX_BUFFERED_THREADS) {
+        const evictedThreadId = bufferTouchOrderRef.current.shift();
+        if (!evictedThreadId || evictedThreadId === activeThreadIdRef.current) {
+          continue;
+        }
+        delete terminalBuffersRef.current[evictedThreadId];
+      }
     });
 
     const disposeStatus = desktop.terminal.onStatus(({ threadId, status }) => {
@@ -773,7 +805,7 @@ export function WorkspaceShell() {
       );
     }
 
-    const thread = threads.find((candidate) => candidate.id === node.threadId) ?? null;
+    const thread = threadById.get(node.threadId) ?? null;
 
     if (!thread) {
       return <div className="min-h-0 flex-1 bg-slate-950" />;
@@ -866,42 +898,41 @@ export function WorkspaceShell() {
     );
   };
 
-  const pendingTargetGroup = pendingMoveProject
-    ? groups.find((g) => g.id === pendingMoveProject.targetGroupId)
-    : null;
+  const pendingTargetGroup = pendingMoveProject ? groupById.get(pendingMoveProject.targetGroupId) : null;
   const pendingCurrentGroup = pendingMoveProject?.project.groupId
-    ? groups.find((g) => g.id === pendingMoveProject.project.groupId)
+    ? groupById.get(pendingMoveProject.project.groupId)
     : null;
 
   return (
-    <SidebarProvider className="h-dvh max-h-dvh overflow-hidden">
-      <AppSidebar
-        projects={projects}
-        groups={groups}
-        threads={threads}
-        activeThreadId={activeThreadId}
-        activeView={activeView}
-        hasMacWindowControlsInset={runtime?.platform === "darwin"}
-        busy={isBusy}
-        splitThreadIds={splitThreadIds}
-        onAddProject={handleAddProject}
-        onCreateGroup={handleCreateGroup}
-        onRenameGroup={handleRenameGroup}
-        onRemoveGroup={handleRemoveGroup}
-        onMoveProjectToGroup={handleMoveProjectToGroup}
-        onCreateThread={handleCreateThread}
-        onSelectThread={handleSelectThread}
-        onOpenThread={handleOpenThread}
-        onCloseThread={handleCloseThread}
-        onClosePane={handleCloseActivePane}
-        onOpenSettings={() => setActiveView("settings")}
-        onRemoveProject={handleRemoveProject}
-        onRemoveThread={handleRemoveThread}
-        onRenameThread={handleRenameThread}
-        onSplitThreadWithNew={handleSplitActiveThread}
-        onSplitThreadWithActive={handleSplitWithExistingThread}
-      />
-      <SidebarInset className="h-dvh max-h-dvh overflow-hidden">
+    <TooltipProvider>
+      <SidebarProvider className="h-dvh max-h-dvh overflow-hidden">
+        <AppSidebar
+          projects={projects}
+          groups={groups}
+          threads={threads}
+          activeThreadId={activeThreadId}
+          activeView={activeView}
+          hasMacWindowControlsInset={runtime?.platform === "darwin"}
+          busy={isBusy}
+          splitThreadIds={splitThreadIds}
+          onAddProject={handleAddProject}
+          onCreateGroup={handleCreateGroup}
+          onRenameGroup={handleRenameGroup}
+          onRemoveGroup={handleRemoveGroup}
+          onMoveProjectToGroup={handleMoveProjectToGroup}
+          onCreateThread={handleCreateThread}
+          onSelectThread={handleSelectThread}
+          onOpenThread={handleOpenThread}
+          onCloseThread={handleCloseThread}
+          onClosePane={handleCloseActivePane}
+          onOpenSettings={() => setActiveView("settings")}
+          onRemoveProject={handleRemoveProject}
+          onRemoveThread={handleRemoveThread}
+          onRenameThread={handleRenameThread}
+          onSplitThreadWithNew={handleSplitActiveThread}
+          onSplitThreadWithActive={handleSplitWithExistingThread}
+        />
+        <SidebarInset className="h-dvh max-h-dvh overflow-hidden">
         <header className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-800/80 bg-slate-950/70 text-slate-100 backdrop-blur-xl transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
           <div className="flex min-w-0 flex-1 items-center gap-2 px-4">
             <SidebarTrigger className="-ml-1" />
@@ -1028,48 +1059,49 @@ export function WorkspaceShell() {
             </Card>
           )}
         </div>
-      </SidebarInset>
-      <AlertDialog
-        open={pendingMoveProject !== null}
-        onOpenChange={(open) => { if (!open) setPendingMoveProject(null); }}
-      >
-        <AlertDialogContent size="sm">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Mover projeto</AlertDialogTitle>
-            <AlertDialogDescription>
-              O projeto <strong>{pendingMoveProject?.project.name}</strong> já está{" "}
-              {pendingCurrentGroup
-                ? <>no grupo <strong>{pendingCurrentGroup.name}</strong></>
-                : "na raiz"}
-              . Deseja movê-lo para o grupo{" "}
-              <strong>{pendingTargetGroup?.name}</strong>?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setPendingMoveProject(null)}
-              disabled={isBusy}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              disabled={isBusy}
-              onClick={() => {
-                if (!pendingMoveProject) return;
-                const { project, targetGroupId } = pendingMoveProject;
-                setPendingMoveProject(null);
-                void handleMoveProjectToGroup(project.id, targetGroupId);
-              }}
-            >
-              Mover
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </SidebarProvider>
+        </SidebarInset>
+        <AlertDialog
+          open={pendingMoveProject !== null}
+          onOpenChange={(open) => { if (!open) setPendingMoveProject(null); }}
+        >
+          <AlertDialogContent size="sm">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Mover projeto</AlertDialogTitle>
+              <AlertDialogDescription>
+                O projeto <strong>{pendingMoveProject?.project.name}</strong> já está{" "}
+                {pendingCurrentGroup
+                  ? <>no grupo <strong>{pendingCurrentGroup.name}</strong></>
+                  : "na raiz"}
+                . Deseja movê-lo para o grupo{" "}
+                <strong>{pendingTargetGroup?.name}</strong>?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setPendingMoveProject(null)}
+                disabled={isBusy}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                disabled={isBusy}
+                onClick={() => {
+                  if (!pendingMoveProject) return;
+                  const { project, targetGroupId } = pendingMoveProject;
+                  setPendingMoveProject(null);
+                  void handleMoveProjectToGroup(project.id, targetGroupId);
+                }}
+              >
+                Mover
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </SidebarProvider>
+    </TooltipProvider>
   );
 }
 

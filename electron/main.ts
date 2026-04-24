@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, shell } from "electron";
 import { randomUUID } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import os from "node:os";
 import { spawn, type IPty } from "node-pty";
@@ -30,6 +31,7 @@ const rendererUrl = process.env.ELECTRON_RENDERER_URL;
 const STORE_FILE_NAME = "workspace.json";
 const DEFAULT_TERMINAL_SIZE = { cols: 80, rows: 24 };
 const MAX_THREAD_TITLE_LENGTH = 80;
+const SAVE_DEBOUNCE_MS = 120;
 const isDevelopmentMode = Boolean(rendererUrl);
 const appDisplayName = isDevelopmentMode ? "Terminal Shelf - Dev" : "Terminal Shelf";
 
@@ -266,6 +268,9 @@ class WorkspaceRepository {
   private readonly filePath: string;
 
   private store: WorkspaceStore;
+  private pendingSaveTimeout: NodeJS.Timeout | null = null;
+  private saveInFlight: Promise<void> | null = null;
+  private dirty = false;
 
   constructor() {
     const directory = app.getPath("userData");
@@ -611,8 +616,43 @@ class WorkspaceRepository {
     }
   }
 
+  async flushPendingWrites() {
+    if (this.pendingSaveTimeout) {
+      clearTimeout(this.pendingSaveTimeout);
+      this.pendingSaveTimeout = null;
+    }
+    await this.persistStore();
+  }
+
   private save() {
-    writeFileSync(this.filePath, JSON.stringify(this.store, null, 2), "utf8");
+    this.dirty = true;
+    if (this.pendingSaveTimeout) {
+      clearTimeout(this.pendingSaveTimeout);
+    }
+    this.pendingSaveTimeout = setTimeout(() => {
+      this.pendingSaveTimeout = null;
+      void this.persistStore();
+    }, SAVE_DEBOUNCE_MS);
+  }
+
+  private async persistStore() {
+    if (this.saveInFlight) {
+      await this.saveInFlight;
+    }
+    if (!this.dirty) {
+      return;
+    }
+
+    this.dirty = false;
+    const payload = JSON.stringify(this.store);
+    this.saveInFlight = writeFile(this.filePath, payload, "utf8")
+      .catch(() => {
+        this.dirty = true;
+      })
+      .finally(() => {
+        this.saveInFlight = null;
+      });
+    await this.saveInFlight;
   }
 
   private resolveActiveThreadId(candidateThreadId: string | null) {
@@ -647,10 +687,12 @@ class PtyManager {
     this.inputStates.set(threadId, createThreadInputState());
 
     session.onData((data) => {
-      this.broadcast<TerminalDataEvent>("terminal:data", {
+      const payload: TerminalDataEvent = {
         threadId,
         data,
-      });
+      };
+      this.broadcast<TerminalDataEvent>("terminal:data", payload);
+      this.broadcast<TerminalDataEvent>(`terminal:data:${threadId}`, payload);
     });
 
     session.onExit(({ exitCode, signal }) => {
@@ -663,23 +705,29 @@ class PtyManager {
         return;
       }
 
-      this.broadcast<TerminalStatusEvent>("terminal:status", {
+      const statusPayload: TerminalStatusEvent = {
         threadId,
         status: "closed",
-      });
+      };
+      this.broadcast<TerminalStatusEvent>("terminal:status", statusPayload);
+      this.broadcast<TerminalStatusEvent>(`terminal:status:${threadId}`, statusPayload);
 
-      this.broadcast<TerminalExitEvent>("terminal:exit", {
+      const exitPayload: TerminalExitEvent = {
         threadId,
         exitCode,
         signal,
-      });
+      };
+      this.broadcast<TerminalExitEvent>("terminal:exit", exitPayload);
+      this.broadcast<TerminalExitEvent>(`terminal:exit:${threadId}`, exitPayload);
     });
 
     const openedThread = this.repository.openThread(threadId);
-    this.broadcast<TerminalStatusEvent>("terminal:status", {
+    const openedStatusPayload: TerminalStatusEvent = {
       threadId,
       status: openedThread.status,
-    });
+    };
+    this.broadcast<TerminalStatusEvent>("terminal:status", openedStatusPayload);
+    this.broadcast<TerminalStatusEvent>(`terminal:status:${threadId}`, openedStatusPayload);
 
     return openedThread;
   }
@@ -694,10 +742,12 @@ class PtyManager {
     }
 
     const thread = this.repository.closeThread(threadId);
-    this.broadcast<TerminalStatusEvent>("terminal:status", {
+    const closedStatusPayload: TerminalStatusEvent = {
       threadId,
       status: thread.status,
-    });
+    };
+    this.broadcast<TerminalStatusEvent>("terminal:status", closedStatusPayload);
+    this.broadcast<TerminalStatusEvent>(`terminal:status:${threadId}`, closedStatusPayload);
 
     return thread;
   }
@@ -881,6 +931,7 @@ class PtyManager {
 let repository: WorkspaceRepository;
 let ptyManager: PtyManager;
 let tray: Tray | null = null;
+let isFlushingBeforeQuit = false;
 
 function resolveIconAssetPath() {
   return resolveAppAssetPath("public", isDevelopmentMode ? "logo-term-dev.png" : "logo-term.png");
@@ -1103,7 +1154,18 @@ app.whenReady().then(() => {
   });
 });
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
+  if (!isFlushingBeforeQuit) {
+    event.preventDefault();
+    isFlushingBeforeQuit = true;
+    void repository
+      .flushPendingWrites()
+      .finally(() => {
+        app.quit();
+      });
+    return;
+  }
+
   tray?.destroy();
   tray = null;
   ptyManager?.disposeAll();

@@ -1,6 +1,6 @@
 "use client"
 
-import { type DragEvent, type FormEvent, useState } from "react"
+import { type DragEvent, type FormEvent, useMemo, useState } from "react"
 
 import {
   AlertDialog,
@@ -111,6 +111,43 @@ export function NavProjects({
     name: string
     projectCount: number
   } | null>(null)
+  const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects])
+  const threadsByProjectId = useMemo(() => {
+    const byProjectId = new Map<string, Thread[]>()
+    for (const thread of threads) {
+      const projectThreads = byProjectId.get(thread.projectId)
+      if (projectThreads) {
+        projectThreads.push(thread)
+      } else {
+        byProjectId.set(thread.projectId, [thread])
+      }
+    }
+    return byProjectId
+  }, [threads])
+  const projectsByGroupId = useMemo(() => {
+    const byGroupId = new Map<string, Project[]>()
+    const ungrouped: Project[] = []
+    for (const project of projects) {
+      if (!project.groupId) {
+        ungrouped.push(project)
+        continue
+      }
+      const groupedProjects = byGroupId.get(project.groupId)
+      if (groupedProjects) {
+        groupedProjects.push(project)
+      } else {
+        byGroupId.set(project.groupId, [project])
+      }
+    }
+    return { byGroupId, ungrouped }
+  }, [projects])
+  const activeProjectIds = useMemo(() => {
+    if (!activeThreadId) {
+      return new Set<string>()
+    }
+    const activeThread = threads.find((thread) => thread.id === activeThreadId)
+    return activeThread ? new Set([activeThread.projectId]) : new Set<string>()
+  }, [activeThreadId, threads])
 
   const closeRenameDialog = () => {
     setRenameTarget(null)
@@ -180,7 +217,7 @@ export function NavProjects({
       return
     }
 
-    const draggedProject = projects.find((project) => project.id === projectId)
+    const draggedProject = projectById.get(projectId)
     if (!draggedProject || draggedProject.groupId === targetGroupId) {
       return
     }
@@ -189,7 +226,7 @@ export function NavProjects({
   }
 
   const renderProject = (project: Project) => {
-    const projectThreads = threads.filter((thread) => thread.projectId === project.id)
+    const projectThreads = threadsByProjectId.get(project.id) ?? []
     const isProjectActive = projectThreads.some((thread) => thread.id === activeThreadId)
     const groupsForMove = groups.filter((g) => g.id !== project.groupId)
     const canMoveToNoGroup = project.groupId !== null
@@ -205,6 +242,7 @@ export function NavProjects({
           className={`rounded-md transition-colors hover:bg-slate-900/55 ${
             draggedProjectId === project.id ? "opacity-60" : ""
           }`}
+          style={{ contentVisibility: "auto", containIntrinsicSize: "160px" }}
           draggable={!busy}
           onDragStart={(event) => {
             if (busy) {
@@ -418,7 +456,7 @@ export function NavProjects({
     )
   }
 
-  const ungroupedProjects = projects.filter((p) => p.groupId === null)
+  const ungroupedProjects = projectsByGroupId.ungrouped
 
   return (
     <>
@@ -451,10 +489,8 @@ export function NavProjects({
         <SidebarMenu>
           {/* Grupos de projetos */}
           {groups.map((group) => {
-            const groupProjects = projects.filter((p) => p.groupId === group.id)
-            const isGroupActive = groupProjects.some((p) =>
-              threads.some((t) => t.projectId === p.id && t.id === activeThreadId)
-            )
+            const groupProjects = projectsByGroupId.byGroupId.get(group.id) ?? []
+            const isGroupActive = groupProjects.some((project) => activeProjectIds.has(project.id))
 
             return (
               <Collapsible
