@@ -72,7 +72,7 @@ export function AppSidebar({
   void _hasMacWindowControlsInset
 
   return (
-    <Sidebar collapsible="icon" {...props}>
+    <Sidebar collapsible="none" {...props}>
       <SidebarContent>
         <NavProjects
           projects={projects}

@@ -287,7 +287,7 @@ function SidebarTrigger({
 }
 
 function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
-  const { isMobile, state, setSidebarWidth, toggleSidebar } = useSidebar()
+  const { isMobile, state, setSidebarWidth } = useSidebar()
 
   const handlePointerDown = React.useCallback(
     (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -300,18 +300,12 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
       const sidebarSide = sidebarElement?.dataset.side === "right" ? "right" : "left"
       const startX = event.clientX
       const startWidth = sidebarElement?.getBoundingClientRect().width ?? 0
-      let didDrag = false
-
       railElement.setPointerCapture?.(event.pointerId)
 
       const handlePointerMove = (moveEvent: PointerEvent) => {
         const deltaX = moveEvent.clientX - startX
         const nextWidth = sidebarSide === "right" ? startWidth - deltaX : startWidth + deltaX
         const clampedWidth = Math.min(SIDEBAR_MAX_WIDTH_PX, Math.max(SIDEBAR_MIN_WIDTH_PX, nextWidth))
-
-        if (!didDrag && Math.abs(deltaX) > 3) {
-          didDrag = true
-        }
 
         setSidebarWidth(clampedWidth)
       }
@@ -321,26 +315,23 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
         document.removeEventListener("pointerup", handlePointerUp)
         document.removeEventListener("pointercancel", handlePointerUp)
 
-        if (!didDrag) {
-          toggleSidebar()
-        }
       }
 
       document.addEventListener("pointermove", handlePointerMove)
       document.addEventListener("pointerup", handlePointerUp)
       document.addEventListener("pointercancel", handlePointerUp)
     },
-    [isMobile, setSidebarWidth, state, toggleSidebar]
+    [isMobile, setSidebarWidth, state]
   )
 
   return (
     <button
       data-sidebar="rail"
       data-slot="sidebar-rail"
-      aria-label="Toggle Sidebar"
+      aria-label="Resize Sidebar"
       tabIndex={-1}
       onPointerDown={handlePointerDown}
-      title="Toggle Sidebar"
+      title="Resize Sidebar"
       className={cn(
         "absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
         "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",

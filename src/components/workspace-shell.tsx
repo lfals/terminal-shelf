@@ -6,12 +6,9 @@ import { FolderPlus, LoaderCircle, MonitorCog, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/app-sidebar";
-import { Badge } from "@/components/ui/badge";
-import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   collectSplitThreadIds,
@@ -102,15 +99,7 @@ export function WorkspaceShell() {
   const threadById = useMemo(() => new Map(threads.map((thread) => [thread.id, thread])), [threads]);
   const groupById = useMemo(() => new Map(groups.map((group) => [group.id, group])), [groups]);
   const runtime = runtimeInfo.runtime;
-  const activeProject = useMemo(
-    () =>
-      activeThread
-        ? projects.find((project) => project.id === activeThread.projectId) ?? null
-        : null,
-    [activeThread, projects]
-  );
   const splitThreadIds = useMemo(() => collectSplitThreadIds(layout), [layout]);
-  const hasSplitLayout = splitThreadIds.size > 0;
 
   useEffect(() => {
     activeThreadIdRef.current = activeThreadId;
@@ -763,9 +752,6 @@ export function WorkspaceShell() {
     }
   };
 
-  const breadcrumbLabel = activeView === "settings" ? "Workspace" : activeProject?.name ?? "Workspace";
-  const breadcrumbDetail = activeView === "settings" ? "Settings" : activeThread?.title ?? "Select a terminal";
-
   const renderLayoutNode = (node: WorkspaceLayoutNode) => {
     if (node.type === "split") {
       const containerClassName =
@@ -907,70 +893,6 @@ export function WorkspaceShell() {
           onSplitThreadWithActive={handleSplitWithExistingThread}
         />
         <SidebarInset className="h-dvh max-h-dvh overflow-hidden">
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b border-slate-800/80 bg-slate-950/70 text-slate-100 backdrop-blur-xl transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-          <div className="flex min-w-0 flex-1 items-center gap-2 px-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-2 bg-slate-700 data-[orientation=vertical]:h-4" />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbPage>{breadcrumbLabel}</BreadcrumbPage>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>{breadcrumbDetail}</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-          </div>
-          <div className="flex items-center gap-2 px-4">
-            {hasSplitLayout ? (
-              <Badge className="hidden border-slate-700/80 bg-slate-800/80 text-slate-200 md:inline-flex">
-                Split view
-              </Badge>
-            ) : null}
-            {activeThread && activeView === "terminal" ? (
-              <Badge className={`${statusBadgeClassName(activeThread.status)} hidden md:inline-flex`}>
-                {threadStatusLabel[activeThread.status]}
-              </Badge>
-            ) : null}
-            {activeThread && activeView === "terminal" ? (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="border-slate-700 bg-slate-950/60 text-slate-100 hover:bg-slate-900"
-                  onClick={() => void handleSplitActiveThread("vertical")}
-                  disabled={isBusy}
-                >
-                  Split vertical
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="border-slate-700 bg-slate-950/60 text-slate-100 hover:bg-slate-900"
-                  onClick={() => void handleSplitActiveThread("horizontal")}
-                  disabled={isBusy}
-                >
-                  Split horizontal
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="border-slate-700 bg-slate-950/60 text-slate-100 hover:bg-slate-900"
-                  onClick={() => void handleCloseActivePane()}
-                  disabled={isBusy}
-                  aria-label="Close pane"
-                >
-                  <X className="size-4" />
-                </Button>
-              </>
-            ) : null}
-          </div>
-        </header>
         <div
           className={
             activeView === "terminal"
@@ -1126,14 +1048,3 @@ const threadStatusLabel: Record<ThreadStatus, string> = {
   errored: "Errored",
 };
 
-function statusBadgeClassName(status: ThreadStatus) {
-  if (status === "running") {
-    return "border-emerald-400/30 bg-emerald-500/15 text-emerald-200";
-  }
-
-  if (status === "errored") {
-    return "border-rose-400/30 bg-rose-500/15 text-rose-200";
-  }
-
-  return "border-slate-700/80 bg-slate-800/80 text-slate-200";
-}
