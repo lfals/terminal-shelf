@@ -35,29 +35,6 @@ const MAX_THREAD_TITLE_LENGTH = 80;
 const SAVE_DEBOUNCE_MS = 120;
 const isDevelopmentMode = Boolean(rendererUrl);
 const appDisplayName = isDevelopmentMode ? "Terminal Shelf - Dev" : "Terminal Shelf";
-const debugEndpoint = "http://127.0.0.1:7245/ingest/13f5c151-b45d-4eae-8718-eac8900b6bfe";
-const debugSessionId = "af539c";
-
-const emitDebugLog = (payload: {
-  runId: string;
-  hypothesisId: string;
-  location: string;
-  message: string;
-  data: Record<string, unknown>;
-}) => {
-  fetch(debugEndpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": debugSessionId,
-    },
-    body: JSON.stringify({
-      sessionId: debugSessionId,
-      ...payload,
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-};
 
 interface ThreadInputState {
   buffer: string;
@@ -1041,19 +1018,6 @@ function createTrayIconImage() {
 }
 
 function ensureTray(mainWindow: BrowserWindow) {
-  // #region agent log
-  emitDebugLog({
-    runId: "initial",
-    hypothesisId: "H1",
-    location: "electron/main.ts:ensureTray:entry",
-    message: "ensureTray called",
-    data: {
-      trayExists: Boolean(tray),
-      windowCount: BrowserWindow.getAllWindows().length,
-      mainWindowDestroyed: mainWindow.isDestroyed(),
-    },
-  });
-  // #endregion
   if (tray) {
     tray.setImage(createTrayIconImage());
     return tray;
@@ -1061,19 +1025,6 @@ function ensureTray(mainWindow: BrowserWindow) {
 
   tray = new Tray(createTrayIconImage());
   tray.setToolTip(appDisplayName);
-  // #region agent log
-  emitDebugLog({
-    runId: "initial",
-    hypothesisId: "H2",
-    location: "electron/main.ts:ensureTray:menu-template",
-    message: "building tray context menu",
-    data: {
-      showLabel: `Show ${appDisplayName}`,
-      quitLabel: "Quit",
-      platform: process.platform,
-    },
-  });
-  // #endregion
   tray.setContextMenu(
     Menu.buildFromTemplate([
       {
@@ -1093,20 +1044,6 @@ function ensureTray(mainWindow: BrowserWindow) {
     ])
   );
   tray.on("click", () => {
-    // #region agent log
-    emitDebugLog({
-      runId: "initial",
-      hypothesisId: "H3",
-      location: "electron/main.ts:ensureTray:tray-click",
-      message: "tray click event",
-      data: {
-        mainWindowDestroyed: mainWindow.isDestroyed(),
-        isVisible: mainWindow.isVisible(),
-        isFocused: mainWindow.isFocused(),
-        isMinimized: mainWindow.isMinimized(),
-      },
-    });
-    // #endregion
     if (mainWindow.isVisible() && mainWindow.isFocused()) {
       mainWindow.hide();
       return;
@@ -1277,18 +1214,6 @@ app.whenReady().then(() => {
   createMainWindow();
 
   app.on("activate", () => {
-    // #region agent log
-    emitDebugLog({
-      runId: "initial",
-      hypothesisId: "H5",
-      location: "electron/main.ts:app-activate",
-      message: "app activate event",
-      data: {
-        windowCount: BrowserWindow.getAllWindows().length,
-        trayExists: Boolean(tray),
-      },
-    });
-    // #endregion
     if (BrowserWindow.getAllWindows().length === 0) {
       createMainWindow();
     }
@@ -1296,19 +1221,6 @@ app.whenReady().then(() => {
 });
 
 app.on("before-quit", (event) => {
-  // #region agent log
-  emitDebugLog({
-    runId: "initial",
-    hypothesisId: "H4",
-    location: "electron/main.ts:before-quit",
-    message: "before quit fired",
-    data: {
-      isFlushingBeforeQuit,
-      trayExists: Boolean(tray),
-      windowCount: BrowserWindow.getAllWindows().length,
-    },
-  });
-  // #endregion
   if (!isFlushingBeforeQuit) {
     event.preventDefault();
     isFlushingBeforeQuit = true;

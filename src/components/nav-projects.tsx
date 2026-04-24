@@ -35,6 +35,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import type { Project, ProjectGroup, SplitDirection, Thread } from "@/lib/workspace-types"
+import { cn } from "@/lib/utils"
 import {
   ChevronRight,
   Folder,
@@ -460,8 +461,8 @@ export function NavProjects({
 
   return (
     <>
-      <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-        <SidebarGroupLabel className="flex items-center justify-between">
+      <SidebarGroup className="group-data-[collapsible=icon]:hidden flex min-h-0 min-w-0 flex-1 flex-col">
+        <SidebarGroupLabel className="flex shrink-0 items-center justify-between">
           <span>Projects</span>
           <div className="flex items-center gap-1">
             <button
@@ -486,7 +487,8 @@ export function NavProjects({
             </button>
           </div>
         </SidebarGroupLabel>
-        <SidebarMenu>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-0">
+          <SidebarMenu className="shrink-0">
           {/* Grupos de projetos */}
           {groups.map((group) => {
             const groupProjects = projectsByGroupId.byGroupId.get(group.id) ?? []
@@ -629,12 +631,14 @@ export function NavProjects({
               </Collapsible>
             )
           })}
+          </SidebarMenu>
 
-          {/* Projetos sem grupo */}
+          {/* Zona raiz fora do ul de grupos: flex-1 preenche a sidebar para aceitar drop */}
           <div
-            className={`rounded-md transition-colors ${
+            className={cn(
+              "flex min-h-0 min-w-0 flex-1 flex-col rounded-md transition-colors",
               isRootDropActive ? "bg-cyan-500/10 ring-1 ring-cyan-400/30" : ""
-            }`}
+            )}
             onDragOver={(event) => {
               if (busy) {
                 return
@@ -655,9 +659,23 @@ export function NavProjects({
             }}
             onDrop={(event) => completeProjectDrop(event, null)}
           >
-            {ungroupedProjects.map((project) => renderProject(project))}
+            <SidebarMenu className="shrink-0">
+              {ungroupedProjects.map((project) => renderProject(project))}
+            </SidebarMenu>
+            <div
+              className={cn(
+                "min-h-28 w-full flex-1 rounded-md",
+                ungroupedProjects.length === 0
+                  ? "flex items-center justify-center border border-dashed border-slate-600/35 bg-slate-950/25 px-2 py-4 text-center text-xs text-slate-500"
+                  : "min-h-16"
+              )}
+            >
+              {ungroupedProjects.length === 0 ? (
+                <span className="pointer-events-none select-none">Drop here to remove from group</span>
+              ) : null}
+            </div>
           </div>
-        </SidebarMenu>
+        </div>
       </SidebarGroup>
 
       {/* Dialog: renomear thread ou grupo */}

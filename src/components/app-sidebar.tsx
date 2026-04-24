@@ -13,6 +13,7 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
+import { cn } from "@/lib/utils"
 import type { Project, ProjectGroup, SplitDirection, Thread } from "@/lib/workspace-types"
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
@@ -48,7 +49,7 @@ export function AppSidebar({
   threads,
   activeThreadId,
   activeView,
-  hasMacWindowControlsInset: _hasMacWindowControlsInset,
+  hasMacWindowControlsInset = false,
   busy = false,
   splitThreadIds,
   onAddProject,
@@ -67,13 +68,24 @@ export function AppSidebar({
   onRenameThread,
   onSplitThreadWithNew,
   onSplitThreadWithActive,
-  ...props
+  className,
+  ...sidebarProps
 }: AppSidebarProps) {
-  void _hasMacWindowControlsInset
-
   return (
-    <Sidebar collapsible="none" {...props}>
-      <SidebarContent>
+    <Sidebar
+      collapsible="none"
+      className={cn(
+        "border-r border-slate-700/40 bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900/98 text-slate-200 shadow-[inset_-1px_0_0_rgb(148_163_184/0.06)]",
+        className
+      )}
+      {...sidebarProps}
+    >
+      <SidebarContent
+        className={cn(
+          "pt-5",
+          hasMacWindowControlsInset && "pt-12"
+        )}
+      >
         <NavProjects
           projects={projects}
           groups={groups}
@@ -98,7 +110,7 @@ export function AppSidebar({
           onSplitThreadWithActive={onSplitThreadWithActive}
         />
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="border-t border-slate-800/60 bg-slate-950/40">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
