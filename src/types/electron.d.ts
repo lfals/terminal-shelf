@@ -1,5 +1,6 @@
 import type {
   Project,
+  ProjectBatchCreateResult,
   ProjectGroup,
   TerminalDataEvent,
   TerminalExitEvent,
@@ -24,7 +25,7 @@ declare global {
       openExternal: (url: string) => Promise<void>;
       projects: {
         list: () => Promise<Project[]>;
-        create: () => Promise<{ project: Project; isNew: boolean } | null>;
+        create: (targetGroupId?: string | null) => Promise<ProjectBatchCreateResult | null>;
         remove: (projectId: string) => Promise<void>;
         moveToGroup: (projectId: string, groupId: string | null) => Promise<Project>;
       };

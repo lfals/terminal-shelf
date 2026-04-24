@@ -18,6 +18,12 @@ export interface Project {
   updatedAt: string;
 }
 
+export interface ProjectBatchCreateResult {
+  added: Project[];
+  existing: Project[];
+  moved: Project[];
+}
+
 export interface Thread {
   id: string;
   projectId: string;

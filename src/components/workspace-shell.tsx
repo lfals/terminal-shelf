@@ -6,14 +6,6 @@ import { FolderPlus, LoaderCircle, MonitorCog, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/app-sidebar";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Button } from "@/components/ui/button";
@@ -32,6 +24,7 @@ import {
 import { getRuntimeInfo } from "@/lib/runtime";
 import type {
   Project,
+  ProjectBatchCreateResult,
   ProjectGroup,
   SplitDirection,
   Thread,
@@ -98,10 +91,6 @@ export function WorkspaceShell() {
   const [isLoading, setIsLoading] = useState(true);
   const [isBusy, setIsBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [pendingMoveProject, setPendingMoveProject] = useState<{
-    project: Project;
-    targetGroupId: string;
-  } | null>(null);
   const terminalBuffersRef = useRef<Record<string, string>>({});
   const bufferTouchOrderRef = useRef<string[]>([]);
   const activeThreadIdRef = useRef<string | null>(null);
@@ -324,33 +313,23 @@ export function WorkspaceShell() {
     setErrorMessage(null);
 
     try {
-      const result = await desktop.projects.create();
+      const result = await desktop.projects.create(groupId ?? null);
 
       if (!result) {
         return;
       }
-
-      const { project, isNew } = result;
-
-      if (isNew) {
-        let finalProject = project;
-        if (groupId) {
-          finalProject = await desktop.projects.moveToGroup(project.id, groupId);
-        }
+      const changedProjects = [...result.added, ...result.moved];
+      if (changedProjects.length > 0) {
         startTransition(() => {
-          setProjects((currentProjects) => [...currentProjects, finalProject]);
+          setProjects((currentProjects) => mergeProjects(currentProjects, changedProjects));
         });
-      } else if (groupId && project.groupId !== groupId) {
-        setPendingMoveProject({ project, targetGroupId: groupId });
+        toast.success("Projetos atualizados", {
+          description: formatBatchAddSummary(result, groupId ?? null, groupById),
+        });
       } else {
-        const existingGroupName = project.groupId
-          ? groups.find((group) => group.id === project.groupId)?.name ?? null
-          : null;
-        setErrorMessage(
-          existingGroupName
-            ? `O projeto "${project.name}" já existe no grupo "${existingGroupName}".`
-            : `O projeto "${project.name}" já existe na lista.`
-        );
+        toast.info("Nenhuma alteração", {
+          description: formatBatchAddSummary(result, groupId ?? null, groupById),
+        });
       }
     } catch (error) {
       setErrorMessage(
@@ -898,11 +877,6 @@ export function WorkspaceShell() {
     );
   };
 
-  const pendingTargetGroup = pendingMoveProject ? groupById.get(pendingMoveProject.targetGroupId) : null;
-  const pendingCurrentGroup = pendingMoveProject?.project.groupId
-    ? groupById.get(pendingMoveProject.project.groupId)
-    : null;
-
   return (
     <TooltipProvider>
       <SidebarProvider className="h-dvh max-h-dvh overflow-hidden">
@@ -1060,49 +1034,54 @@ export function WorkspaceShell() {
           )}
         </div>
         </SidebarInset>
-        <AlertDialog
-          open={pendingMoveProject !== null}
-          onOpenChange={(open) => { if (!open) setPendingMoveProject(null); }}
-        >
-          <AlertDialogContent size="sm">
-            <AlertDialogHeader>
-              <AlertDialogTitle>Mover projeto</AlertDialogTitle>
-              <AlertDialogDescription>
-                O projeto <strong>{pendingMoveProject?.project.name}</strong> já está{" "}
-                {pendingCurrentGroup
-                  ? <>no grupo <strong>{pendingCurrentGroup.name}</strong></>
-                  : "na raiz"}
-                . Deseja movê-lo para o grupo{" "}
-                <strong>{pendingTargetGroup?.name}</strong>?
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setPendingMoveProject(null)}
-                disabled={isBusy}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="button"
-                disabled={isBusy}
-                onClick={() => {
-                  if (!pendingMoveProject) return;
-                  const { project, targetGroupId } = pendingMoveProject;
-                  setPendingMoveProject(null);
-                  void handleMoveProjectToGroup(project.id, targetGroupId);
-                }}
-              >
-                Mover
-              </Button>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </SidebarProvider>
     </TooltipProvider>
   );
+}
+
+function mergeProjects(currentProjects: Project[], changedProjects: Project[]) {
+  if (changedProjects.length === 0) {
+    return currentProjects;
+  }
+
+  const changedById = new Map(changedProjects.map((project) => [project.id, project]));
+  const mergedProjects = currentProjects.map((project) => changedById.get(project.id) ?? project);
+  const knownProjectIds = new Set(mergedProjects.map((project) => project.id));
+  for (const project of changedProjects) {
+    if (!knownProjectIds.has(project.id)) {
+      mergedProjects.push(project);
+      knownProjectIds.add(project.id);
+    }
+  }
+
+  return mergedProjects;
+}
+
+function formatBatchAddSummary(
+  result: ProjectBatchCreateResult,
+  targetGroupId: string | null,
+  groupById: Map<string, ProjectGroup>
+) {
+  const parts: string[] = [];
+
+  if (result.added.length > 0) {
+    parts.push(`${result.added.length} novo(s)`);
+  }
+  if (result.moved.length > 0) {
+    parts.push(`${result.moved.length} movido(s)`);
+  }
+  if (result.existing.length > 0) {
+    parts.push(`${result.existing.length} já existente(s)`);
+  }
+
+  const targetGroup = targetGroupId ? groupById.get(targetGroupId) : undefined;
+  const targetLabel = targetGroup ? ` no grupo "${targetGroup.name}"` : "";
+
+  if (parts.length === 0) {
+    return `Nenhum projeto foi alterado${targetLabel}.`;
+  }
+
+  return `${parts.join(" · ")}${targetLabel}.`;
 }
 
 function getErrorMessage(error: unknown, fallback = "Unexpected error while talking to Electron.") {

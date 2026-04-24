@@ -14,6 +14,7 @@ import {
 } from "../src/lib/workspace-layout";
 import type {
   Project,
+  ProjectBatchCreateResult,
   ProjectGroup,
   TerminalDataEvent,
   TerminalExitEvent,
@@ -340,6 +341,71 @@ class WorkspaceRepository {
     this.save();
 
     return { project, isNew: true };
+  }
+
+  createProjects(projectPaths: string[], targetGroupId: string | null = null): ProjectBatchCreateResult {
+    if (targetGroupId !== null) {
+      this.getGroup(targetGroupId);
+    }
+
+    const existingByPath = new Map(this.store.projects.map((project) => [project.path, project]));
+    const seenPaths = new Set<string>();
+    const added: Project[] = [];
+    const existing: Project[] = [];
+    const moved: Project[] = [];
+    const movedById = new Map<string, Project>();
+    const now = new Date().toISOString();
+
+    for (const inputPath of projectPaths) {
+      const normalizedPath = normalizeProjectPath(inputPath);
+      if (seenPaths.has(normalizedPath)) {
+        continue;
+      }
+      seenPaths.add(normalizedPath);
+
+      const currentProject = existingByPath.get(normalizedPath);
+      if (currentProject) {
+        if (targetGroupId !== null && currentProject.groupId !== targetGroupId) {
+          const updatedProject: Project = {
+            ...currentProject,
+            groupId: targetGroupId,
+            updatedAt: now,
+          };
+          existingByPath.set(normalizedPath, updatedProject);
+          movedById.set(updatedProject.id, updatedProject);
+          moved.push(updatedProject);
+        } else {
+          existing.push(currentProject);
+        }
+        continue;
+      }
+
+      const project: Project = {
+        id: randomUUID(),
+        groupId: targetGroupId,
+        name: basename(normalizedPath),
+        path: normalizedPath,
+        createdAt: now,
+        updatedAt: now,
+      };
+      this.store.projects.push(project);
+      existingByPath.set(normalizedPath, project);
+      added.push(project);
+    }
+
+    if (movedById.size > 0) {
+      this.store.projects = this.store.projects.map((item) => movedById.get(item.id) ?? item);
+    }
+
+    if (added.length > 0 || moved.length > 0) {
+      this.save();
+    }
+
+    return {
+      added,
+      existing,
+      moved,
+    };
   }
 
   removeProject(projectId: string) {
@@ -1083,11 +1149,11 @@ app.whenReady().then(() => {
   );
 
   ipcMain.handle("projects:list", () => repository.listProjects());
-  ipcMain.handle("projects:create", async () => {
+  ipcMain.handle("projects:create", async (_event, targetGroupId: string | null = null) => {
     const result = await dialog.showOpenDialog({
       title: "Add project folder",
-      buttonLabel: "Add project",
-      properties: ["openDirectory", "createDirectory"],
+      buttonLabel: "Add projects",
+      properties: ["openDirectory", "createDirectory", "multiSelections"],
       defaultPath: os.homedir(),
     });
 
@@ -1095,7 +1161,7 @@ app.whenReady().then(() => {
       return null;
     }
 
-    return repository.createProject(result.filePaths[0]);
+    return repository.createProjects(result.filePaths, targetGroupId);
   });
   ipcMain.handle("projects:remove", (_event, projectId: string) => {
     const removedThreadIds = repository.removeProject(projectId);

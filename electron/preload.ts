@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
   Project,
+  ProjectBatchCreateResult,
   ProjectGroup,
   TerminalDataEvent,
   TerminalExitEvent,
@@ -32,8 +33,8 @@ contextBridge.exposeInMainWorld("desktop", {
   openExternal: (url: string) => ipcRenderer.invoke("desktop:open-external", url),
   projects: {
     list: (): Promise<Project[]> => ipcRenderer.invoke("projects:list"),
-    create: (): Promise<{ project: Project; isNew: boolean } | null> =>
-      ipcRenderer.invoke("projects:create"),
+    create: (targetGroupId: string | null = null): Promise<ProjectBatchCreateResult | null> =>
+      ipcRenderer.invoke("projects:create", targetGroupId),
     remove: (projectId: string): Promise<void> =>
       ipcRenderer.invoke("projects:remove", projectId),
     moveToGroup: (projectId: string, groupId: string | null): Promise<Project> =>
