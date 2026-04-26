@@ -7,7 +7,8 @@ import { createInterface } from "node:readline/promises";
 type ChangeType = "epoch" | "major" | "minor" | "patch";
 
 type EpochSemverState = {
-  combined: number;
+  epoch: number;
+  major: number;
   minor: number;
   patch: number;
 };
@@ -91,7 +92,7 @@ function gitTagExists(tag: string): boolean {
 }
 
 function formatEpochSemver(version: EpochSemverState): string {
-  return `${version.combined}.${version.minor}.${version.patch}`;
+  return `${version.epoch * 1000 + version.major}.${version.minor}.${version.patch}`;
 }
 
 function formatGitTag(version: EpochSemverState): string {
@@ -100,9 +101,17 @@ function formatGitTag(version: EpochSemverState): string {
 
 function convertLegacySemverToEpoch(version: LegacySemverState): EpochSemverState {
   return {
-    combined: version.epoch * 1000 + version.major,
+    epoch: version.epoch,
+    major: version.major,
     minor: version.minor,
     patch: 0,
+  };
+}
+
+function splitCombinedMajor(combined: number): Pick<EpochSemverState, "epoch" | "major"> {
+  return {
+    epoch: Math.floor(combined / 1000),
+    major: combined % 1000,
   };
 }
 
@@ -127,7 +136,7 @@ function inferCurrentEpochSemver(version: string): {
 
   return {
     current: {
-      combined: first,
+      ...splitCombinedMajor(first),
       minor: second,
       patch: third,
     },
@@ -136,18 +145,16 @@ function inferCurrentEpochSemver(version: string): {
 }
 
 function bumpEpochSemver(version: EpochSemverState, changeType: ChangeType): EpochSemverState {
-  const epoch = Math.floor(version.combined / 1000);
-  const major = version.combined % 1000;
-
   switch (changeType) {
     case "epoch":
       return {
-        combined: (epoch + 1) * 1000,
+        epoch: version.epoch + 1,
+        major: 0,
         minor: 0,
         patch: 0,
       };
     case "major": {
-      const nextMajor = major + 1;
+      const nextMajor = version.major + 1;
 
       if (nextMajor >= 1000) {
         throw new Error(
@@ -156,20 +163,23 @@ function bumpEpochSemver(version: EpochSemverState, changeType: ChangeType): Epo
       }
 
       return {
-        combined: epoch * 1000 + nextMajor,
+        epoch: version.epoch,
+        major: nextMajor,
         minor: 0,
         patch: 0,
       };
     }
     case "minor":
       return {
-        combined: version.combined,
+        epoch: version.epoch,
+        major: version.major,
         minor: version.minor + 1,
         patch: 0,
       };
     case "patch":
       return {
-        combined: version.combined,
+        epoch: version.epoch,
+        major: version.major,
         minor: version.minor,
         patch: version.patch + 1,
       };
@@ -253,6 +263,7 @@ async function main() {
 
   output.write(`Versao atual no package.json: ${currentPackageVersion}\n`);
   output.write(`Leitura da versao atual: ${sourceLabel}\n`);
+  output.write(`Estado Epoch SemVer atual: epoch=${current.epoch}, major=${current.major}, minor=${current.minor}, patch=${current.patch}\n`);
   output.write(`Versao base para release: ${formatEpochSemver(current)}\n`);
   output.write(`Tag base para release: ${formatGitTag(current)}\n\n`);
 
