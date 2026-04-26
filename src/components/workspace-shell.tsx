@@ -97,6 +97,8 @@ export function WorkspaceShell() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const terminalBuffersRef = useRef<Record<string, string>>({});
   const bufferTouchOrderRef = useRef<string[]>([]);
+  const pendingBufferChunksRef = useRef<Record<string, string>>({});
+  const pendingBufferFlushFrameRef = useRef<number | null>(null);
   const activeThreadIdRef = useRef<string | null>(null);
 
   const activeThread = useMemo(
@@ -204,10 +206,26 @@ export function WorkspaceShell() {
       })
       .finally(() => setIsLoading(false));
 
-    const disposeData = desktop.terminal.onData(({ threadId, data }) => {
-      const currentValue = terminalBuffersRef.current[threadId] ?? "";
-      terminalBuffersRef.current[threadId] = trimBuffer(`${currentValue}${data}`);
-      touchBufferThread(bufferTouchOrderRef.current, threadId);
+    const flushPendingBufferChunks = () => {
+      pendingBufferFlushFrameRef.current = null;
+      const pendingEntries = Object.entries(pendingBufferChunksRef.current);
+
+      if (pendingEntries.length === 0) {
+        return;
+      }
+
+      pendingBufferChunksRef.current = {};
+
+      for (const [threadId, pendingData] of pendingEntries) {
+        if (!pendingData) {
+          continue;
+        }
+
+        const currentValue = terminalBuffersRef.current[threadId] ?? "";
+        terminalBuffersRef.current[threadId] = trimBuffer(`${currentValue}${pendingData}`);
+        touchBufferThread(bufferTouchOrderRef.current, threadId);
+      }
+
       while (bufferTouchOrderRef.current.length > MAX_BUFFERED_THREADS) {
         const evictedThreadId = bufferTouchOrderRef.current.shift();
         if (!evictedThreadId || evictedThreadId === activeThreadIdRef.current) {
@@ -215,6 +233,20 @@ export function WorkspaceShell() {
         }
         delete terminalBuffersRef.current[evictedThreadId];
       }
+    };
+
+    const schedulePendingBufferFlush = () => {
+      if (pendingBufferFlushFrameRef.current !== null) {
+        return;
+      }
+
+      pendingBufferFlushFrameRef.current = window.requestAnimationFrame(flushPendingBufferChunks);
+    };
+
+    const disposeData = desktop.terminal.onData(({ threadId, data }) => {
+      pendingBufferChunksRef.current[threadId] =
+        (pendingBufferChunksRef.current[threadId] ?? "") + data;
+      schedulePendingBufferFlush();
     });
 
     const disposeStatus = desktop.terminal.onStatus(({ threadId, status }) => {
@@ -246,6 +278,11 @@ export function WorkspaceShell() {
     });
 
     return () => {
+      if (pendingBufferFlushFrameRef.current !== null) {
+        window.cancelAnimationFrame(pendingBufferFlushFrameRef.current);
+      }
+      pendingBufferFlushFrameRef.current = null;
+      pendingBufferChunksRef.current = {};
       disposeData();
       disposeStatus();
       disposeExit();
