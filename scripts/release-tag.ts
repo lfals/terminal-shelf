@@ -13,12 +13,6 @@ type EpochSemverState = {
   patch: number;
 };
 
-type LegacySemverState = {
-  epoch: number;
-  major: number;
-  minor: number;
-};
-
 const CHANGE_OPTIONS: Array<{
   key: string;
   type: ChangeType;
@@ -99,15 +93,6 @@ function formatGitTag(version: EpochSemverState): string {
   return `v${formatEpochSemver(version)}`;
 }
 
-function convertLegacySemverToEpoch(version: LegacySemverState): EpochSemverState {
-  return {
-    epoch: version.epoch,
-    major: version.major,
-    minor: version.minor,
-    patch: 0,
-  };
-}
-
 function splitCombinedMajor(combined: number): Pick<EpochSemverState, "epoch" | "major"> {
   return {
     epoch: Math.floor(combined / 1000),
@@ -121,26 +106,13 @@ function inferCurrentEpochSemver(version: string): {
 } {
   const [first, second, third] = parseNumericTriplet(version);
 
-  if (first === 0) {
-    const legacy = {
-      epoch: first,
-      major: second,
-      minor: third,
-    };
-
-    return {
-      current: convertLegacySemverToEpoch(legacy),
-      sourceLabel: `SemVer legado ${version}`,
-    };
-  }
-
   return {
     current: {
       ...splitCombinedMajor(first),
       minor: second,
       patch: third,
     },
-    sourceLabel: `Epoch SemVer ${version}`,
+    sourceLabel: `Epoch SemVer (compativel com SemVer) ${version}`,
   };
 }
 
