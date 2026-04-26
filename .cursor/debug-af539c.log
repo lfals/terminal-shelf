@@ -1,0 +1,3 @@
+{"sessionId":"af539c","runId":"initial","hypothesisId":"H5","location":"electron/main.ts:app-activate","message":"app activate event","data":{"windowCount":1,"trayExists":true},"timestamp":1777163602144}
+{"sessionId":"af539c","runId":"initial","hypothesisId":"H4","location":"electron/main.ts:before-quit","message":"before quit fired","data":{"isFlushingBeforeQuit":false,"trayExists":true,"windowCount":1},"timestamp":1777163893316}
+{"sessionId":"af539c","runId":"initial","hypothesisId":"H4","location":"electron/main.ts:before-quit","message":"before quit fired","data":{"isFlushingBeforeQuit":true,"trayExists":true,"windowCount":1},"timestamp":1777163893321}

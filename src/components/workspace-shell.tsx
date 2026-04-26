@@ -892,7 +892,7 @@ export function WorkspaceShell() {
           onSplitThreadWithNew={handleSplitActiveThread}
           onSplitThreadWithActive={handleSplitWithExistingThread}
         />
-        <SidebarInset className="h-dvh max-h-dvh overflow-hidden">
+        <SidebarInset className="h-dvh max-h-dvh overflow-hidden md:peer-data-[variant=inset]:my-0">
         <div
           className={
             activeView === "terminal"
@@ -950,7 +950,7 @@ export function WorkspaceShell() {
               </CardHeader>
             </Card>
           ) : (
-            <Card className="workspace-panel flex min-h-0 flex-1 flex-col overflow-hidden rounded-none text-slate-100">
+            <Card className="workspace-panel flex min-h-0 flex-1 flex-col overflow-hidden rounded-none py-0 text-slate-100">
               <CardContent className="relative flex min-h-0 flex-1 flex-col p-0">{renderLayoutNode(layout)}</CardContent>
             </Card>
           )}
