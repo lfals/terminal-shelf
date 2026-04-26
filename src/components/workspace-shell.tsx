@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { startTransition, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { FolderPlus, LoaderCircle, MonitorCog, Plus, X } from "lucide-react";
 import { toast } from "sonner";
+import packageJson from "../../package.json";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,9 @@ import type {
 const MAX_BUFFER_SIZE = 120_000;
 const MAX_BUFFERED_THREADS = 40;
 type MainView = "terminal" | "settings";
+const APP_VERSION = packageJson.version;
+const DEFAULT_UPDATE_REPOSITORY = "lfals/terminal-shelf";
+const UPDATE_REPOSITORY = process.env.NEXT_PUBLIC_UPDATE_REPOSITORY ?? DEFAULT_UPDATE_REPOSITORY;
 const TerminalPane = dynamic(
   () => import("@/components/terminal/terminal-pane").then((module) => module.TerminalPane),
   {
@@ -87,6 +91,9 @@ export function WorkspaceShell() {
   const [runtimeInfo, setRuntimeInfo] = useState(() => getRuntimeInfo(undefined));
   const [isLoading, setIsLoading] = useState(true);
   const [isBusy, setIsBusy] = useState(false);
+  const [isCheckingUpdates, setIsCheckingUpdates] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState<string | null>(null);
+  const [updateDownloadUrl, setUpdateDownloadUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const terminalBuffersRef = useRef<Record<string, string>>({});
   const bufferTouchOrderRef = useRef<string[]>([]);
@@ -752,6 +759,31 @@ export function WorkspaceShell() {
     }
   };
 
+  const handleCheckForUpdates = async () => {
+    setIsCheckingUpdates(true);
+    setUpdateMessage(null);
+    setUpdateDownloadUrl(null);
+
+    try {
+      const latestRelease = await fetchLatestRelease(UPDATE_REPOSITORY);
+      const currentVersion = normalizeVersionLabel(APP_VERSION);
+      const latestVersion = normalizeVersionLabel(latestRelease.tagName);
+      const comparison = compareVersions(currentVersion, latestVersion);
+
+      if (comparison < 0) {
+        setUpdateMessage(`Nova versão disponível: ${latestVersion} (atual: ${currentVersion}).`);
+        setUpdateDownloadUrl(latestRelease.htmlUrl);
+        return;
+      }
+
+      setUpdateMessage(`Você já está na versão mais recente (${currentVersion}).`);
+    } catch (error) {
+      setUpdateMessage(getErrorMessage(error, "Não foi possível verificar atualizações agora."));
+    } finally {
+      setIsCheckingUpdates(false);
+    }
+  };
+
   const renderLayoutNode = (node: WorkspaceLayoutNode) => {
     if (node.type === "split") {
       const containerClassName =
@@ -920,6 +952,37 @@ export function WorkspaceShell() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="rounded-xl border border-slate-800/80 bg-slate-950/45 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Version</p>
+                  <p className="mt-2 text-sm text-slate-100">{APP_VERSION}</p>
+                </div>
+                <div className="rounded-xl border border-slate-800/80 bg-slate-950/45 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Updates</p>
+                  <p className="mt-2 text-sm text-slate-100">
+                    Verifique se existe uma nova versão publicada para instalação.
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Button type="button" onClick={() => void handleCheckForUpdates()} disabled={isCheckingUpdates}>
+                      {isCheckingUpdates ? "Verificando..." : "Verificar atualização"}
+                    </Button>
+                    {updateDownloadUrl ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void openExternalLink(updateDownloadUrl)}
+                      >
+                        Baixar atualização
+                      </Button>
+                    ) : null}
+                  </div>
+                  {updateMessage ? (
+                    <p className="mt-3 text-sm text-slate-300">{updateMessage}</p>
+                  ) : (
+                    <p className="mt-3 text-sm text-slate-500">
+                      Origem: github.com/{UPDATE_REPOSITORY}
+                    </p>
+                  )}
+                </div>
+                <div className="rounded-xl border border-slate-800/80 bg-slate-950/45 p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Runtime</p>
                   <p className="mt-2 text-sm text-slate-100">{getRuntimeSubtitle(runtimeInfo, runtime)}</p>
                 </div>
@@ -1039,6 +1102,85 @@ function getRuntimeSubtitle(
   }
 
   return "Web browser";
+}
+
+interface GithubReleasePayload {
+  tag_name: string;
+  html_url: string;
+}
+
+interface LatestRelease {
+  tagName: string;
+  htmlUrl: string;
+}
+
+async function fetchLatestRelease(repository: string): Promise<LatestRelease> {
+  const response = await fetch(`https://api.github.com/repos/${repository}/releases/latest`, {
+    headers: {
+      Accept: "application/vnd.github+json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error("Falha ao consultar release mais recente.");
+  }
+
+  const payload = (await response.json()) as GithubReleasePayload;
+
+  if (!payload.tag_name || !payload.html_url) {
+    throw new Error("Resposta de release inválida.");
+  }
+
+  return {
+    tagName: payload.tag_name,
+    htmlUrl: payload.html_url,
+  };
+}
+
+function normalizeVersionLabel(version: string) {
+  return version.trim().replace(/^v/i, "");
+}
+
+function compareVersions(currentVersion: string, targetVersion: string) {
+  const currentParts = parseVersionParts(currentVersion);
+  const targetParts = parseVersionParts(targetVersion);
+  const maxLength = Math.max(currentParts.length, targetParts.length);
+
+  for (let index = 0; index < maxLength; index += 1) {
+    const currentPart = currentParts[index] ?? 0;
+    const targetPart = targetParts[index] ?? 0;
+
+    if (currentPart < targetPart) {
+      return -1;
+    }
+    if (currentPart > targetPart) {
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
+function parseVersionParts(version: string) {
+  const parts = version.split(".").map((part) => Number.parseInt(part, 10));
+  const hasInvalidPart = parts.some((part) => Number.isNaN(part));
+
+  if (hasInvalidPart) {
+    throw new Error(`Versão inválida: ${version}`);
+  }
+
+  return parts;
+}
+
+function openExternalLink(url: string) {
+  const desktop = window.desktop;
+
+  if (desktop) {
+    return desktop.openExternal(url);
+  }
+
+  window.open(url, "_blank", "noopener,noreferrer");
+  return Promise.resolve();
 }
 
 const threadStatusLabel: Record<ThreadStatus, string> = {
